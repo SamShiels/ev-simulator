@@ -3,21 +3,18 @@ import { Canvas } from '@react-three/fiber'
 import Scene from './Scene'
 import Sidebar from './Sidebar'
 
+export type RoadType = 'straight' | 'corner'
+
 export interface Block {
   id: string
   position: [number, number, number]
-  color: string
+  roadType: RoadType
+  rotation: number // 0–3, each step = 90°
 }
 
-export const COLORS = [
-  '#4169E1', '#DC143C', '#228B22',
-  '#FF8C00', '#9400D3', '#FFD700',
-  '#FF6347', '#008B8B', '#A0A0A0',
-  '#8B4513', '#20B2AA', '#FF69B4',
-]
-
 export default function App() {
-  const [selectedColor, setSelectedColor] = useState(COLORS[0])
+  const [selectedRoadType, setSelectedRoadType] = useState<RoadType>('straight')
+  const [ghostRotation, setGhostRotation] = useState(0)
   const [blocks, setBlocks] = useState<Block[]>([])
 
   function placeBlock(pos: [number, number, number]) {
@@ -25,8 +22,17 @@ export default function App() {
     if (occupied) return
     setBlocks(prev => [
       ...prev,
-      { id: `${pos[0]}-${pos[2]}-${Date.now()}`, position: pos, color: selectedColor },
+      {
+        id: `${pos[0]}-${pos[2]}-${Date.now()}`,
+        position: pos,
+        roadType: selectedRoadType,
+        rotation: ghostRotation,
+      },
     ])
+  }
+
+  function rotate() {
+    setGhostRotation(r => (r + 1) % 4)
   }
 
   return (
@@ -36,9 +42,15 @@ export default function App() {
         camera={{ position: [10, 10, 10], zoom: 60, near: 0.1, far: 1000 }}
         style={{ width: '100%', height: '100%' }}
       >
-        <Scene blocks={blocks} selectedColor={selectedColor} onPlace={placeBlock} />
+        <Scene
+          blocks={blocks}
+          selectedRoadType={selectedRoadType}
+          ghostRotation={ghostRotation}
+          onPlace={placeBlock}
+          onRotate={rotate}
+        />
       </Canvas>
-      <Sidebar colors={COLORS} selectedColor={selectedColor} onSelect={setSelectedColor} />
+      <Sidebar selectedRoadType={selectedRoadType} onSelect={setSelectedRoadType} />
     </div>
   )
 }
