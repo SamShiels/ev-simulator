@@ -8,11 +8,11 @@ import { TILE_SIZE } from '../constants'
 
 const OBJ_PATH: Record<RoadType, string> = {
   straight: '/assets/roads/road-straight.obj',
-  corner:   '/assets/roads/road-bend-sidewalk.obj',
+  corner:   '/assets/roads/road-curve-pavement.obj',
 }
 const MTL_PATH: Record<RoadType, string> = {
   straight: '/assets/roads/road-straight.mtl',
-  corner:   '/assets/roads/road-bend-sidewalk.mtl',
+  corner:   '/assets/roads/road-curve-pavement.mtl',
 }
 
 export function RoadTileModel({
@@ -47,7 +47,7 @@ export function RoadTileModel({
   return (
     <primitive
       object={clone}
-      scale={TILE_SIZE}
+      scale={TILE_SIZE * 0.5}
       rotation={[0, (rotation * Math.PI) / 2, 0]}
     />
   )
