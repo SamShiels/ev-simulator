@@ -11,7 +11,7 @@ const OBJ = '/assets/car/sedan-sports.obj';
 const SPEED = 6;
 
 // 1. Suspension roll / pitch tuning
-const ROLL_STRENGTH = 0.01;   // radians of body roll per unit of signed curvature
+const ROLL_STRENGTH = 0.001;   // radians of body roll per unit of signed curvature
 const ROLL_SMOOTHING = 2.5;   // lerp rate — lower = heavier, slower suspension lag
 const PITCH_STRENGTH = 0.3;   // fraction of road gradient expressed as body pitch
 const PITCH_SMOOTHING = 2.0;
@@ -19,6 +19,13 @@ const PITCH_SMOOTHING = 2.0;
 // 2. Lateral lane-wander tuning
 const DRIFT_AMPLITUDE = 0.1; // max lateral offset in world units
 const DRIFT_FREQUENCY = 0.28; // cycles per second of the wander sine wave
+
+// 3. Corner speed tuning
+const LOOK_AHEAD      = 0.01;  // fraction of curve to look ahead when anticipating corners
+const CORNER_SLOWDOWN = 0.02;  // speed reduction per unit of curvature magnitude
+const MIN_SPEED_FACTOR = 0.35; // never drop below this fraction of SPEED
+const SPEED_BRAKE     = 5.0;   // lerp rate when decelerating (fast — commit to the corner)
+const SPEED_ACCEL     = 1.8;   // lerp rate when accelerating (slow — gradual power-on)
 
 // Dashcam height above the car's world origin
 const DASHCAM_HEIGHT = 0.5;
@@ -64,6 +71,7 @@ function Model({ curve, playing, rendering, onRenderComplete }: Props) {
   const timeRef  = useRef(0);
   const rollRef  = useRef(0);
   const pitchRef = useRef(0);
+  const speedRef = useRef(SPEED);
 
   // ── Dashcam camera ─────────────────────────────────────────────────────────
   const { set, get, size } = useThree();
@@ -107,9 +115,22 @@ function Model({ curve, playing, rendering, onRenderComplete }: Props) {
       return;
     }
 
+    const len = curve.getLength();
+
+    // ── Corner speed: sample curvature at look-ahead before advancing t ──────
+    const eps = 0.002;
+    const tLook      = (tRef.current + LOOK_AHEAD) % 1;
+    const tanLook    = curve.getTangent(tLook);
+    const tanLookFwd = curve.getTangent((tLook + eps) % 1);
+    _cross.crossVectors(tanLook, tanLookFwd);
+    const lookCurvature  = Math.abs(_cross.y) / eps;
+    const targetSpeedFactor = Math.max(MIN_SPEED_FACTOR, 1 - lookCurvature * CORNER_SLOWDOWN);
+    const targetSpeed = SPEED * targetSpeedFactor;
+    const lerpRate = targetSpeed < speedRef.current ? SPEED_BRAKE : SPEED_ACCEL;
+    speedRef.current = THREE.MathUtils.lerp(speedRef.current, targetSpeed, delta * lerpRate);
+
     // Advance t — rendering stops at the end of the road instead of looping
-    const len  = curve.getLength();
-    const step = (SPEED / len) * delta;
+    const step = (speedRef.current / len) * delta;
 
     if (rendering) {
       if (tRef.current + step >= 1) {
@@ -143,8 +164,6 @@ function Model({ curve, playing, rendering, onRenderComplete }: Props) {
     groupRef.current.rotation.y = Math.atan2(tangent.x, tangent.z);
 
     // ── 1. Suspension roll from spline curvature ────────────────────────────
-    // Sample tangent slightly ahead to estimate signed curvature.
-    const eps = 0.002;
     const nextTangent = curve.getTangent((t + eps) % 1);
     _cross.crossVectors(tangent, nextTangent);
 
@@ -174,14 +193,14 @@ function Model({ curve, playing, rendering, onRenderComplete }: Props) {
       // +π flips the default -Z look direction to +Z (car forward)
       dashCam.rotation.y = Math.atan2(tangent.x, tangent.z) + Math.PI;
       dashCam.rotation.x = pitchRef.current;
-      dashCam.rotation.z = rollRef.current;
+      dashCam.rotation.z = -rollRef.current;
     }
   });
 
   return (
     <group ref={groupRef}>
       <group ref={bodyRef}>
-        <primitive object={clone} scale={0.4} />
+        <primitive object={clone} scale={0.3} />
       </group>
     </group>
   );
