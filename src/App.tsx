@@ -26,6 +26,7 @@ export default function App() {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [selectedObject, setSelectedObject] = useState<SelectedObject>(null);
   const [gizmoMode, setGizmoMode] = useState<GizmoMode>('translate');
+  const [playing, setPlaying] = useState(false);
 
   function placeBlock(pos: [number, number, number]) {
     if (!selectedRoadType) return;
@@ -106,6 +107,7 @@ export default function App() {
           ghostRotation={ghostRotation}
           selectedId={selectedObject?.kind === 'tile' ? selectedObject.id : null}
           gizmoMode={gizmoMode}
+          playing={playing}
           onPlace={placeBlock}
           onRotate={rotate}
           onSelectBlock={handleSelectBlock}
@@ -116,14 +118,13 @@ export default function App() {
         />
       </Canvas>
 
-      {/* Gizmo mode tab bar */}
+      {/* Toolbar */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 flex gap-1 rounded-xl backdrop-blur-xl bg-white/10 shadow-2xl border border-white/15 p-1 z-10">
         <button
           title="Move"
           onClick={() => setGizmoMode('translate')}
           className={`p-2 rounded-lg transition-all ${gizmoMode === 'translate' ? 'bg-white/20 text-white' : 'text-white/40 hover:text-white hover:bg-white/10'}`}
         >
-          {/* Four-way move arrows */}
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
             <path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M12 3v18M3 12h18" />
           </svg>
@@ -133,11 +134,29 @@ export default function App() {
           onClick={() => setGizmoMode('rotate')}
           className={`p-2 rounded-lg transition-all ${gizmoMode === 'rotate' ? 'bg-white/20 text-white' : 'text-white/40 hover:text-white hover:bg-white/10'}`}
         >
-          {/* Circular rotation arrow */}
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
             <path d="M21.5 2v6h-6" />
             <path d="M21.34 15.57a10 10 0 1 1-.57-8.38" />
           </svg>
+        </button>
+
+        <div className="w-px bg-white/20 mx-0.5" />
+
+        <button
+          title={playing ? 'Stop' : 'Play'}
+          onClick={() => setPlaying(p => !p)}
+          className="p-2 rounded-lg transition-all text-white/40 hover:text-white hover:bg-white/10"
+        >
+          {playing ? (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+              <rect x="5" y="4" width="4" height="16" rx="1" />
+              <rect x="15" y="4" width="4" height="16" rx="1" />
+            </svg>
+          ) : (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+              <polygon points="5,3 19,12 5,21" />
+            </svg>
+          )}
         </button>
       </div>
 

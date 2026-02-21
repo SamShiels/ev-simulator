@@ -11,10 +11,11 @@ const OBJ = '/assets/car/sedan-sports.obj'
 const SPEED = 6
 
 interface Props {
-  curve: THREE.Curve<THREE.Vector3> | null
+  curve: THREE.Curve<THREE.Vector3> | null;
+  playing: boolean;
 }
 
-function Model({ curve }: Props) {
+function Model({ curve, playing }: Props) {
   const materials = useLoader(MTLLoader, MTL)
   const obj = useLoader(OBJLoader, OBJ, loader => {
     materials.preload()
@@ -28,7 +29,7 @@ function Model({ curve }: Props) {
   const tRef = useRef(0)
 
   useFrame((_, delta) => {
-    if (!curve || !groupRef.current) return
+    if (!curve || !groupRef.current || !playing) return
 
     // Advance t proportional to world-space speed
     const len = curve.getLength()
@@ -49,10 +50,10 @@ function Model({ curve }: Props) {
   )
 }
 
-export default function Car({ curve }: Props) {
+export default function Car({ curve, playing }: Props) {
   return (
     <Suspense fallback={null}>
-      <Model curve={curve} />
+      <Model curve={curve} playing={playing} />
     </Suspense>
   )
 }
