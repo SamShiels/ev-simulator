@@ -51,6 +51,12 @@ export default function App() {
     setSelectedObject(null);
   }
 
+  function handleMoveBlock(id: string, newPos: [number, number, number]) {
+    const occupied = blocks.some(b => b.id !== id && b.position[0] === newPos[0] && b.position[2] === newPos[2]);
+    if (occupied) return;
+    setBlocks(prev => prev.map(b => b.id === id ? { ...b, position: newPos } : b));
+  }
+
   function handleDelete() {
     if (!selectedObject) return;
     if (selectedObject.kind === 'tile') {
@@ -94,6 +100,7 @@ export default function App() {
           onRotate={rotate}
           onSelectBlock={handleSelectBlock}
           onDeselect={handleDeselect}
+          onMoveBlock={handleMoveBlock}
         />
       </Canvas>
       <Sidebar

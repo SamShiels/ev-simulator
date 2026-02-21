@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { useThree, useFrame } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Block, RoadType } from './App';
 import { TILE_SIZE } from './constants';
 import Car from './Car';
 import CurveLine from './visuals/CurveLine';
 import RoadTile from './visuals/RoadTile';
+import SelectionGizmo from './visuals/SelectionGizmo';
 import { findRoadPath } from './road/pathfinder';
 import { buildRoadCurve } from './road/roadCurve';
 
@@ -18,6 +19,7 @@ interface Props {
   onRotate: () => void;
   onSelectBlock: (id: string) => void;
   onDeselect: () => void;
+  onMoveBlock: (id: string, newPos: [number, number, number]) => void;
 }
 
 const GROUND = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -35,10 +37,18 @@ export default function Scene({
   onRotate,
   onSelectBlock,
   onDeselect,
+  onMoveBlock,
 }: Props) {
   const { gl, camera } = useThree();
   const [ghost, setGhost] = useState<[number, number, number] | null>(null);
-  const pointerPosRef = useRef<{ x: number; y: number } | null>(null);
+
+  // Shared with SelectionGizmo — true while an axis drag is in progress.
+  const isDraggingGizmoRef = useRef(false);
+
+  // Option/Alt + drag to pan.
+  const prevPtrRef  = useRef<{ x: number; y: number } | null>(null);
+  const rightVec    = useRef(new THREE.Vector3());
+  const screenUpVec = useRef(new THREE.Vector3());
 
   // Keep stable refs for callbacks so event listeners don't need to re-register.
   const blocksRef = useRef(blocks);
@@ -52,27 +62,6 @@ export default function Scene({
   const onDeselectRef = useRef(onDeselect);
   onDeselectRef.current = onDeselect;
 
-  // Edge pan: move camera each frame when cursor is within EDGE_PX of the viewport border.
-  const EDGE_PX = 40;
-  const right = new THREE.Vector3();
-  const screenUp = new THREE.Vector3();
-  useFrame((_, delta) => {
-    const pos = pointerPosRef.current;
-    if (!pos) return;
-    const rect = gl.domElement.getBoundingClientRect();
-    const xRel = pos.x - rect.left;
-    const yRel = pos.y - rect.top;
-
-    const speed = (800 / camera.zoom) * delta;
-
-    right.setFromMatrixColumn(camera.matrixWorld, 0).setY(0).normalize();
-    screenUp.setFromMatrixColumn(camera.matrixWorld, 1).setY(0).normalize();
-
-    if (xRel < EDGE_PX)                    camera.position.addScaledVector(right, -speed);
-    else if (xRel > rect.width - EDGE_PX)  camera.position.addScaledVector(right,  speed);
-    if (yRel < EDGE_PX)                    camera.position.addScaledVector(screenUp,  speed);
-    else if (yRel > rect.height - EDGE_PX) camera.position.addScaledVector(screenUp, -speed);
-  });
 
   const roadCurve = useMemo(() => {
     const result = findRoadPath(blocks);
@@ -99,15 +88,28 @@ export default function Scene({
     }
 
     const onMove = (e: PointerEvent) => {
-      pointerPosRef.current = { x: e.clientX, y: e.clientY };
-      setGhost(toGrid(e));
+      const prev = prevPtrRef.current;
+      prevPtrRef.current = { x: e.clientX, y: e.clientY };
+
+      if (e.altKey && prev && (e.buttons & 1)) {
+        // Option + drag → pan camera.
+        const dx = e.clientX - prev.x;
+        const dy = e.clientY - prev.y;
+        const speed = 1 / camera.zoom;
+        rightVec.current.setFromMatrixColumn(camera.matrixWorld, 0).setY(0).normalize();
+        screenUpVec.current.setFromMatrixColumn(camera.matrixWorld, 1).setY(0).normalize();
+        camera.position.addScaledVector(rightVec.current, -dx * speed);
+        camera.position.addScaledVector(screenUpVec.current, dy * speed);
+        setGhost(null);
+      } else if (!isDraggingGizmoRef.current && !e.altKey) {
+        setGhost(toGrid(e));
+      }
     };
 
     const onClick = (e: MouseEvent) => {
+      if (isDraggingGizmoRef.current || e.altKey) return;
       const p = toGrid(e);
       if (!p) return;
-
-      // If an existing block occupies this grid cell, select it instead of placing.
       const existing = blocksRef.current.find(
         b => b.position[0] === p[0] && b.position[2] === p[2],
       );
@@ -120,8 +122,22 @@ export default function Scene({
     };
 
     const onLeave = () => {
-      pointerPosRef.current = null;
+      prevPtrRef.current = null;
       setGhost(null);
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Alt') {
+        e.preventDefault();
+        canvas.style.cursor = 'grab';
+        setGhost(null);
+      }
+    };
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Alt') {
+        canvas.style.cursor = '';
+      }
     };
 
     const onContext = (e: MouseEvent) => {
@@ -141,14 +157,20 @@ export default function Scene({
     canvas.addEventListener('pointerleave', onLeave);
     canvas.addEventListener('contextmenu', onContext);
     canvas.addEventListener('wheel', onWheel, { passive: false });
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
     return () => {
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('click', onClick);
       canvas.removeEventListener('pointerleave', onLeave);
       canvas.removeEventListener('contextmenu', onContext);
       canvas.removeEventListener('wheel', onWheel);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
     };
   }, [gl, camera]);
+
+  const selectedBlock = selectedId ? blocks.find(b => b.id === selectedId) ?? null : null;
 
   return (
     <>
@@ -176,6 +198,14 @@ export default function Scene({
           selected={b.id === selectedId}
         />
       ))}
+
+      {selectedBlock && (
+        <SelectionGizmo
+          position={selectedBlock.position}
+          onMove={(newPos) => onMoveBlock(selectedId!, newPos)}
+          isDraggingRef={isDraggingGizmoRef}
+        />
+      )}
     </>
   );
 }
