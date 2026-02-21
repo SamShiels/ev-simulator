@@ -45,7 +45,7 @@ function blockKey(b: Block) {
 }
 
 // The direction the path starts moving from the 0,0 tile.
-const START_DIR: Dir = 'N'
+const START_DIR: Dir = 'S'
 
 // Walk the road starting at block (0,0) in START_DIR, following connected tiles
 // until a tile has no exit that connects to the next one.

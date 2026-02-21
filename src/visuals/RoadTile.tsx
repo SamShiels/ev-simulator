@@ -58,17 +58,25 @@ export default function RoadTile({
   roadType,
   rotation,
   ghost = false,
+  selected = false,
 }: {
-  position: [number, number, number]
-  roadType: RoadType
-  rotation: number
-  ghost?: boolean
+  position: [number, number, number];
+  roadType: RoadType;
+  rotation: number;
+  ghost?: boolean;
+  selected?: boolean;
 }) {
   return (
     <group position={position}>
+      {selected && (
+        <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[TILE_SIZE * 0.97, TILE_SIZE * 0.97]} />
+          <meshBasicMaterial color="#3b82f6" transparent opacity={0.28} depthWrite={false} />
+        </mesh>
+      )}
       <Suspense fallback={null}>
         <RoadTileModel roadType={roadType} rotation={rotation} ghost={ghost} />
       </Suspense>
     </group>
-  )
+  );
 }
