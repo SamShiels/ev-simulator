@@ -6,8 +6,8 @@ import { RoadTileModel } from './visuals/RoadTile';
 import Inspector, { type InspectedObject } from './Inspector';
 
 interface Props {
-  selectedRoadType: RoadType;
-  onSelect: (type: RoadType) => void;
+  selectedRoadType: RoadType | null;
+  onSelect: (type: RoadType | null) => void;
   inspectedObject: InspectedObject | null;
   onDelete: () => void;
 }
@@ -63,6 +63,9 @@ function Divider() {
 }
 
 export default function Sidebar({ selectedRoadType, onSelect, inspectedObject, onDelete }: Props) {
+  function handleTileClick(type: RoadType) {
+    onSelect(selectedRoadType === type ? null : type);
+  }
   return (
     <div className="absolute top-4 right-4 w-52 rounded-xl backdrop-blur-xl bg-white/10 shadow-2xl border border-white/15 py-1 flex flex-col gap-0">
 
@@ -77,7 +80,7 @@ export default function Sidebar({ selectedRoadType, onSelect, inspectedObject, o
           {ROAD_TYPES.map(({ type, label }) => (
             <button
               key={type}
-              onClick={() => onSelect(type)}
+              onClick={() => handleTileClick(type)}
               className={cn(
                 'flex flex-col items-center gap-1.5 p-2 rounded-lg transition-all text-sm font-medium',
                 selectedRoadType === type
@@ -93,7 +96,7 @@ export default function Sidebar({ selectedRoadType, onSelect, inspectedObject, o
           ))}
         </div>
         <p className="mt-3 text-xs text-white/40 text-center leading-tight">
-          R to rotate · right-click to stop placing
+          R to rotate · right-click to cancel
         </p>
       </Section>
 

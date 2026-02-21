@@ -21,13 +21,14 @@ export type SelectedObject =
   | null;
 
 export default function App() {
-  const [selectedRoadType, setSelectedRoadType] = useState<RoadType>('straight');
+  const [selectedRoadType, setSelectedRoadType] = useState<RoadType | null>(null);
   const [ghostRotation, setGhostRotation] = useState(1);
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [selectedObject, setSelectedObject] = useState<SelectedObject>(null);
   const [gizmoMode, setGizmoMode] = useState<GizmoMode>('translate');
 
   function placeBlock(pos: [number, number, number]) {
+    if (!selectedRoadType) return;
     const occupied = blocks.some(b => b.position[0] === pos[0] && b.position[2] === pos[2]);
     if (occupied) return;
     setBlocks(prev => [
@@ -109,6 +110,7 @@ export default function App() {
           onRotate={rotate}
           onSelectBlock={handleSelectBlock}
           onDeselect={handleDeselect}
+          onCancelPlacement={() => setSelectedRoadType(null)}
           onMoveBlock={handleMoveBlock}
           onRotateBlock={handleRotateBlock}
         />
