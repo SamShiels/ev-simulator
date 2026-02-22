@@ -3,6 +3,7 @@ import { useLoader, useFrame, useThree } from '@react-three/fiber';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
 import * as THREE from 'three';
+import type { ScenarioPose } from './scenario/types';
 
 const MTL = '/assets/car/sedan-sports.mtl';
 const OBJ = '/assets/car/sedan-sports.obj';
@@ -35,6 +36,7 @@ const _cross = new THREE.Vector3();
 
 interface Props {
   curve: THREE.Curve<THREE.Vector3> | null;
+  scenarioPose: ScenarioPose | null;
   playing: boolean;
   rendering: boolean;
   onRenderComplete: () => void;
@@ -54,7 +56,7 @@ function roadNoiseY(t: number): number {
   );
 }
 
-function Model({ curve, playing, rendering, onRenderComplete }: Props) {
+function Model({ curve, scenarioPose, playing, rendering, onRenderComplete }: Props) {
   const materials = useLoader(MTLLoader, MTL);
   const obj = useLoader(OBJLoader, OBJ, loader => {
     materials.preload();
@@ -72,6 +74,7 @@ function Model({ curve, playing, rendering, onRenderComplete }: Props) {
   const rollRef  = useRef(0);
   const pitchRef = useRef(0);
   const speedRef = useRef(SPEED);
+  const prevPosRef = useRef<THREE.Vector3 | null>(null);
 
   // ── Dashcam camera ─────────────────────────────────────────────────────────
   const { set, get, size } = useThree();
@@ -107,7 +110,48 @@ function Model({ curve, playing, rendering, onRenderComplete }: Props) {
   }, [rendering]);
 
   useFrame((_, delta) => {
-    if (!curve || !groupRef.current || !bodyRef.current) return;
+    if (!groupRef.current || !bodyRef.current) return;
+
+    timeRef.current += delta;
+    const time = timeRef.current;
+
+    // ── Scenario mode: position driven by external pose ─────────────────────
+    if (scenarioPose) {
+      const [px, py, pz] = scenarioPose.position;
+      const pos = new THREE.Vector3(px, py, pz);
+
+      // Derive a synthetic tangent from the previous position for suspension
+      const prev = prevPosRef.current;
+      const tangent = prev && pos.distanceTo(prev) > 0.0001
+        ? pos.clone().sub(prev).normalize()
+        : new THREE.Vector3(0, 0, 1);
+      prevPosRef.current = pos.clone();
+
+      groupRef.current.position.copy(pos);
+      groupRef.current.rotation.y = scenarioPose.yaw;
+
+      const eps = 0.001;
+      const nextPos = pos.clone().addScaledVector(tangent, eps);
+      const syntheticNext = nextPos.sub(pos).normalize();
+      _cross.crossVectors(tangent, syntheticNext);
+
+      const targetRoll = 0; // no curvature data in scenario mode
+      rollRef.current = THREE.MathUtils.lerp(rollRef.current, targetRoll, delta * ROLL_SMOOTHING);
+
+      const targetPitch = -Math.asin(THREE.MathUtils.clamp(tangent.y, -1, 1)) * PITCH_STRENGTH;
+      pitchRef.current = THREE.MathUtils.lerp(pitchRef.current, targetPitch, delta * PITCH_SMOOTHING);
+
+      const noiseY = roadNoiseY(time);
+      bodyRef.current.rotation.x = pitchRef.current;
+      bodyRef.current.rotation.z = rollRef.current;
+      bodyRef.current.position.y = noiseY;
+      return;
+    }
+
+    // ── Road mode: spline-following ─────────────────────────────────────────
+    if (!curve) return;
+
+    prevPosRef.current = null;
 
     const isActive = playing || rendering;
     if (!isActive) {
@@ -142,47 +186,34 @@ function Model({ curve, playing, rendering, onRenderComplete }: Props) {
       tRef.current = (tRef.current + step) % 1;
     }
 
-    timeRef.current += delta;
-
-    const t    = tRef.current;
-    const time = timeRef.current;
+    const t = tRef.current;
 
     // ── Position & heading ──────────────────────────────────────────────────
     const pos     = curve.getPoint(t);
     const tangent = curve.getTangent(t);
 
     // Right vector perpendicular to travel direction in the XZ plane
-    // Equivalent to worldUp × tangent (normalized since tangent is a unit vector)
     const right = new THREE.Vector3(tangent.z, 0, -tangent.x);
 
-    // 3. Imperfect steering — slow sine wave lateral drift within the lane
+    // Imperfect steering — slow sine wave lateral drift within the lane
     const lateralDrift = Math.sin(time * Math.PI * 2 * DRIFT_FREQUENCY) * DRIFT_AMPLITUDE;
     pos.addScaledVector(right, lateralDrift);
 
     groupRef.current.position.copy(pos);
-    // atan2(x, z) gives the Y rotation for a model that faces +Z by default
     groupRef.current.rotation.y = Math.atan2(tangent.x, tangent.z);
 
     // ── 1. Suspension roll from spline curvature ────────────────────────────
     const nextTangent = curve.getTangent((t + eps) % 1);
     _cross.crossVectors(tangent, nextTangent);
-
-    // cross.y is positive for a left turn, negative for a right turn.
-    // Dividing by eps converts the raw cross product magnitude to an angular rate.
     const signedCurvature = _cross.y / eps;
-
-    // The body leans opposite to centripetal acceleration (suspension inertia).
     const targetRoll = signedCurvature * ROLL_STRENGTH;
     rollRef.current = THREE.MathUtils.lerp(rollRef.current, targetRoll, delta * ROLL_SMOOTHING);
 
-    // Pitch from road gradient (zero on the flat demo track; ready for elevation)
     const targetPitch = -Math.asin(THREE.MathUtils.clamp(tangent.y, -1, 1)) * PITCH_STRENGTH;
     pitchRef.current = THREE.MathUtils.lerp(pitchRef.current, targetPitch, delta * PITCH_SMOOTHING);
 
     // ── 2. Road-noise micro-vibration on the vertical axis ──────────────────
     const noiseY = roadNoiseY(time);
-
-    // Apply pitch, roll, and noise to the inner body group (car-local frame)
     bodyRef.current.rotation.x = pitchRef.current;
     bodyRef.current.rotation.z = rollRef.current;
     bodyRef.current.position.y = noiseY;
@@ -190,7 +221,6 @@ function Model({ curve, playing, rendering, onRenderComplete }: Props) {
     // ── Dashcam: position and orient in world space ─────────────────────────
     if (rendering) {
       dashCam.position.set(pos.x, pos.y + DASHCAM_HEIGHT + noiseY, pos.z);
-      // +π flips the default -Z look direction to +Z (car forward)
       dashCam.rotation.y = Math.atan2(tangent.x, tangent.z) + Math.PI;
       dashCam.rotation.x = pitchRef.current;
       dashCam.rotation.z = -rollRef.current;
@@ -206,10 +236,10 @@ function Model({ curve, playing, rendering, onRenderComplete }: Props) {
   );
 }
 
-export default function Car({ curve, playing, rendering, onRenderComplete }: Props) {
+export default function Car({ curve, scenarioPose, playing, rendering, onRenderComplete }: Props) {
   return (
     <Suspense fallback={null}>
-      <Model curve={curve} playing={playing} rendering={rendering} onRenderComplete={onRenderComplete} />
+      <Model curve={curve} scenarioPose={scenarioPose} playing={playing} rendering={rendering} onRenderComplete={onRenderComplete} />
     </Suspense>
   );
 }

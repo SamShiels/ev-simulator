@@ -9,6 +9,7 @@
     "noImplicitReturns": true,
     "useDefineForClassFields": true,
     "skipLibCheck": true,
+    "noEmit": true,
     "jsx": "react-jsx",
     "paths": {
       "@/*": ["./src/*"]

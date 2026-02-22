@@ -1,9 +1,14 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import Scene from './Scene';
 import Toolbar from './ui/Toolbar';
+import type { AppMode } from './ui/Toolbar';
 import Sidebar from './ui/Sidebar';
+import Timeline from './ui/Timeline';
 import type { InspectedObject } from './ui/Inspector';
+import { defaultScenario, nextActorColor } from './scenario/defaults';
+import { evaluateTrack } from './scenario/interpolate';
+import type { Scenario, Waypoint, WaypointTrack, Actor, ActorKind, ScenarioPose } from './scenario/types';
 
 export type RoadType = 'straight' | 'corner';
 export type GizmoMode = 'translate' | 'rotate';
@@ -17,11 +22,18 @@ export interface Block {
 
 export type SelectedObject =
   | { kind: 'tile'; id: string }
-  // | { kind: 'actor'; id: string }
-  // | { kind: 'static'; id: string }
   | null;
 
+function uid(): string {
+  return Math.random().toString(36).slice(2, 9);
+}
+
+function sortByTime(waypoints: Waypoint[]): Waypoint[] {
+  return [...waypoints].sort((a, b) => a.time - b.time);
+}
+
 export default function App() {
+  // ── Road editor state ──────────────────────────────────────────────────────
   const [selectedRoadType, setSelectedRoadType] = useState<RoadType | null>(null);
   const [ghostRotation, setGhostRotation] = useState(1);
   const [blocks, setBlocks] = useState<Block[]>([
@@ -32,6 +44,16 @@ export default function App() {
   const [playing, setPlaying] = useState(false);
   const [rendering, setRendering] = useState(false);
 
+  // ── App mode ───────────────────────────────────────────────────────────────
+  const [appMode, setAppMode] = useState<AppMode>('road');
+
+  // ── Scenario state ─────────────────────────────────────────────────────────
+  const [scenario, setScenario] = useState<Scenario>(defaultScenario);
+  const [scenarioTime, setScenarioTime] = useState(0);
+  const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null);
+  const [selectedActorId, setSelectedActorId] = useState<string>('ego');
+
+  // ── Road editor handlers ───────────────────────────────────────────────────
   function placeBlock(pos: [number, number, number]) {
     if (!selectedRoadType) return;
     const occupied = blocks.some(b => b.position[0] === pos[0] && b.position[2] === pos[2]);
@@ -81,7 +103,104 @@ export default function App() {
     setSelectedObject(null);
   }
 
-  // Resolve the selected object into its full data for the inspector.
+  // ── Scenario: waypoint mutation handlers ───────────────────────────────────
+  function setTrack(actorId: string, updater: (track: WaypointTrack) => WaypointTrack) {
+    if (actorId === 'ego') {
+      setScenario(s => ({ ...s, egoTrack: updater(s.egoTrack) }));
+    } else {
+      setScenario(s => ({
+        ...s,
+        tracks: s.tracks.map(t => t.actorId === actorId ? updater(t) : t),
+      }));
+    }
+  }
+
+  function addWaypoint(actorId: string, time: number, position: [number, number, number]) {
+    const id = uid();
+    setTrack(actorId, track => ({
+      ...track,
+      waypoints: sortByTime([...track.waypoints, { id, time, position }]),
+    }));
+    setSelectedWaypointId(id);
+  }
+
+  function moveWaypoint(actorId: string, waypointId: string, position: [number, number, number]) {
+    setTrack(actorId, track => ({
+      ...track,
+      waypoints: track.waypoints.map(w => w.id === waypointId ? { ...w, position } : w),
+    }));
+  }
+
+  function setWaypointTime(actorId: string, waypointId: string, time: number) {
+    setTrack(actorId, track => ({
+      ...track,
+      waypoints: sortByTime(track.waypoints.map(w => w.id === waypointId ? { ...w, time } : w)),
+    }));
+  }
+
+  function deleteWaypoint(actorId: string, waypointId: string) {
+    setTrack(actorId, track => ({
+      ...track,
+      waypoints: track.waypoints.filter(w => w.id !== waypointId),
+    }));
+    if (selectedWaypointId === waypointId) setSelectedWaypointId(null);
+  }
+
+  // Delete selected waypoint on Backspace/Delete key in scenario mode
+  useEffect(() => {
+    if (appMode !== 'scenario') return;
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedWaypointId) {
+        deleteWaypoint(selectedActorId, selectedWaypointId);
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [appMode, selectedActorId, selectedWaypointId]);
+
+  function addActor(kind: ActorKind) {
+    const id = uid();
+    const count = scenario.actors.length;
+    const kindLabels: Record<ActorKind, string> = {
+      pedestrian: 'Pedestrian',
+      stroller: 'Stroller',
+      vehicle: 'Vehicle',
+    };
+    const actor: Actor = {
+      id,
+      kind,
+      label: `${kindLabels[kind]} ${count + 1}`,
+      color: nextActorColor(count),
+    };
+    const track: WaypointTrack = { actorId: id, waypoints: [] };
+    setScenario(s => ({
+      ...s,
+      actors: [...s.actors, actor],
+      tracks: [...s.tracks, track],
+    }));
+    setSelectedActorId(id);
+  }
+
+  function removeActor(actorId: string) {
+    setScenario(s => ({
+      ...s,
+      actors: s.actors.filter(a => a.id !== actorId),
+      tracks: s.tracks.filter(t => t.actorId !== actorId),
+    }));
+    if (selectedActorId === actorId) setSelectedActorId('ego');
+  }
+
+  function setDuration(duration: number) {
+    setScenario(s => ({ ...s, duration: Math.max(1, duration) }));
+  }
+
+  // ── Derived: ego car pose in scenario mode ─────────────────────────────────
+  const scenarioPose: ScenarioPose | null = useMemo(() => {
+    if (appMode !== 'scenario') return null;
+    return evaluateTrack(scenario.egoTrack, scenarioTime);
+  }, [appMode, scenario.egoTrack, scenarioTime]);
+
+  // ── Road inspector ─────────────────────────────────────────────────────────
   const inspectedObject: InspectedObject | null = useMemo(() => {
     if (!selectedObject) return null;
     if (selectedObject.kind === 'tile') {
@@ -98,6 +217,12 @@ export default function App() {
     return null;
   }, [selectedObject, blocks]);
 
+  // ── Mode change: stop playback on switch ───────────────────────────────────
+  function handleAppModeChange(mode: AppMode) {
+    setPlaying(false);
+    setAppMode(mode);
+  }
+
   return (
     <div className="dark relative w-screen h-screen bg-[#111]">
       <Canvas
@@ -106,6 +231,7 @@ export default function App() {
         style={{ width: '100%', height: '100%' }}
       >
         <Scene
+          appMode={appMode}
           blocks={blocks}
           selectedRoadType={selectedRoadType}
           ghostRotation={ghostRotation}
@@ -113,6 +239,11 @@ export default function App() {
           gizmoMode={gizmoMode}
           playing={playing}
           rendering={rendering}
+          scenario={scenario}
+          scenarioTime={scenarioTime}
+          scenarioPose={scenarioPose}
+          selectedActorId={selectedActorId}
+          selectedWaypointId={selectedWaypointId}
           onRenderComplete={() => setRendering(false)}
           onPlace={placeBlock}
           onRotate={rotate}
@@ -121,24 +252,55 @@ export default function App() {
           onCancelPlacement={() => setSelectedRoadType(null)}
           onMoveBlock={handleMoveBlock}
           onRotateBlock={handleRotateBlock}
+          onScenarioTimeChange={setScenarioTime}
+          onAddWaypoint={addWaypoint}
+          onMoveWaypoint={moveWaypoint}
+          onSelectWaypoint={setSelectedWaypointId}
         />
       </Canvas>
 
       <Toolbar
+        appMode={appMode}
         gizmoMode={gizmoMode}
         playing={playing}
         rendering={rendering}
+        onAppModeChange={handleAppModeChange}
         onGizmoModeChange={setGizmoMode}
         onPlayToggle={() => setPlaying(p => !p)}
         onRenderStart={() => setRendering(true)}
       />
 
       <Sidebar
+        appMode={appMode}
         selectedRoadType={selectedRoadType}
         onSelect={setSelectedRoadType}
         inspectedObject={inspectedObject}
         onDelete={handleDelete}
+        scenario={scenario}
+        selectedActorId={selectedActorId}
+        selectedWaypointId={selectedWaypointId}
+        onSelectActor={setSelectedActorId}
+        onAddActor={addActor}
+        onRemoveActor={removeActor}
       />
+
+      {appMode === 'scenario' && (
+        <Timeline
+          scenario={scenario}
+          scenarioTime={scenarioTime}
+          playing={playing}
+          selectedActorId={selectedActorId}
+          selectedWaypointId={selectedWaypointId}
+          onScrub={setScenarioTime}
+          onSetDuration={setDuration}
+          onSelectActor={setSelectedActorId}
+          onSelectWaypoint={(actorId: string, waypointId: string) => {
+            setSelectedActorId(actorId);
+            setSelectedWaypointId(waypointId);
+          }}
+          onWaypointTimeChange={setWaypointTime}
+        />
+      )}
     </div>
   );
 }
