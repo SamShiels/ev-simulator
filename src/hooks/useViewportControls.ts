@@ -133,7 +133,14 @@ export function useViewportControls({
     window.addEventListener('keyup', onKeyUpGlobal);
 
     return () => {
-      // ... (remove all event listeners here)
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      canvas.removeEventListener('pointermove', onPointerMove);
+      canvas.removeEventListener('pointerleave', onPointerLeave);
+      canvas.removeEventListener('click', onClick);
+      canvas.removeEventListener('contextmenu', onContext);
+      canvas.removeEventListener('wheel', onWheel);
+      window.removeEventListener('keydown', onKeyDownGlobal);
+      window.removeEventListener('keyup', onKeyUpGlobal);
     };
   }, [enabled, gl, camera]);
 }

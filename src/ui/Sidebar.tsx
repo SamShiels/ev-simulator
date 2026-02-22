@@ -4,13 +4,11 @@ import { cn } from '@/lib/utils';
 import type { RoadType } from '../App';
 import type { Scenario, ActorKind } from '../scenario/types';
 import { RoadTileModel } from '../visuals/RoadTile';
-import Inspector, { type InspectedObject } from './Inspector';
+import { PedestrianMesh, StrollerMesh, VehicleMesh } from '../visuals/ActorMesh';
 
 interface Props {
   selectedRoadType: RoadType | null;
   onSelect: (type: RoadType | null) => void;
-  inspectedObject: InspectedObject | null;
-  onDelete: () => void;
   scenario: Scenario;
   selectedActorId: string;
   selectedWaypointId: string | null;
@@ -24,10 +22,10 @@ const ROAD_TYPES: { type: RoadType; label: string }[] = [
   { type: 'corner', label: 'Corner' },
 ];
 
-const ACTOR_KINDS: { kind: ActorKind; label: string }[] = [
-  { kind: 'pedestrian', label: 'Pedestrian' },
-  { kind: 'stroller', label: 'Stroller' },
-  { kind: 'vehicle', label: 'Vehicle' },
+const ACTOR_KINDS: { kind: ActorKind; label: string; cameraPos: [number, number, number] }[] = [
+  { kind: 'pedestrian', label: 'Pedestrian', cameraPos: [1.5, 2.5, 2] },
+  { kind: 'stroller',   label: 'Stroller',   cameraPos: [1.5, 2, 2] },
+  { kind: 'vehicle',    label: 'Vehicle',     cameraPos: [4, 4, 5] },
 ];
 
 function TilePreview({ roadType }: { roadType: RoadType }) {
@@ -42,6 +40,23 @@ function TilePreview({ roadType }: { roadType: RoadType }) {
       <Suspense fallback={null}>
         <RoadTileModel roadType={roadType} rotation={0} ghost={false} />
       </Suspense>
+    </Canvas>
+  );
+}
+
+function ActorKindPreview({ kind, cameraPos }: { kind: ActorKind; cameraPos: [number, number, number] }) {
+  const PREVIEW_COLOR = '#9ca3af';
+  return (
+    <Canvas
+      camera={{ position: cameraPos, fov: 40 }}
+      style={{ width: '100%', height: '100%' }}
+      gl={{ antialias: true, alpha: true }}
+    >
+      <ambientLight intensity={2} />
+      <directionalLight position={[3, 6, 3]} intensity={1} />
+      {kind === 'pedestrian' && <PedestrianMesh color={PREVIEW_COLOR} />}
+      {kind === 'stroller' && <StrollerMesh color={PREVIEW_COLOR} />}
+      {kind === 'vehicle' && <VehicleMesh color={PREVIEW_COLOR} />}
     </Canvas>
   );
 }
@@ -71,15 +86,18 @@ function Section({ title, defaultOpen = true, children }: { title: string; defau
   );
 }
 
-function Divider() {
-  return <div className="border-t border-white/10 mx-3" />;
+
+function SubLabel({ children }: { children: string }) {
+  return (
+    <p className="text-[10px] font-semibold tracking-widest uppercase text-white/30 mt-3 mb-1">
+      {children}
+    </p>
+  );
 }
 
 export default function Sidebar({
   selectedRoadType,
   onSelect,
-  inspectedObject,
-  onDelete,
   scenario,
   selectedActorId,
   onSelectActor,
@@ -92,17 +110,10 @@ export default function Sidebar({
 
   return (
     <div className="absolute top-4 right-4 w-52 rounded-xl backdrop-blur-xl bg-white/10 shadow-2xl border border-white/15 py-1 flex flex-col gap-0">
-      {inspectedObject && (
-        <>
-          <Section title="Inspector" defaultOpen={true}>
-            <Inspector object={inspectedObject} onDelete={onDelete} />
-          </Section>
-          <Divider />
-        </>
-      )}
-
       <Section title="Place" defaultOpen={true}>
-        <div className="grid grid-cols-2 gap-2 mt-1">
+
+        <SubLabel>Roads</SubLabel>
+        <div className="grid grid-cols-2 gap-2">
           {ROAD_TYPES.map(({ type, label }) => (
             <button
               key={type}
@@ -121,60 +132,63 @@ export default function Sidebar({
             </button>
           ))}
         </div>
-        <p className="mt-3 text-xs text-white/40 text-center leading-tight">
-          R to rotate · right-click to cancel
-        </p>
-      </Section>
 
-      <Divider />
-
-      <Section title="Actors" defaultOpen={true}>
-        <div
-          onClick={() => onSelectActor('ego')}
-          className={cn(
-            'flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-all',
-            selectedActorId === 'ego' ? 'bg-white/20 text-white' : 'text-white/50 hover:text-white hover:bg-white/10',
-          )}
-        >
-          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: '#22d3ee' }} />
-          <span className="flex-1 truncate">Car (ego)</span>
-        </div>
-
-        {scenario.actors.map(actor => (
-          <div
-            key={actor.id}
-            onClick={() => onSelectActor(actor.id)}
-            className={cn(
-              'flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-all group',
-              selectedActorId === actor.id ? 'bg-white/20 text-white' : 'text-white/50 hover:text-white hover:bg-white/10',
-            )}
-          >
-            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: actor.color }} />
-            <span className="flex-1 truncate">{actor.label}</span>
-            <button
-              onClick={(e) => { e.stopPropagation(); onRemoveActor(actor.id); }}
-              className="opacity-0 group-hover:opacity-100 text-white/40 hover:text-white transition-all"
-              title="Remove actor"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          </div>
-        ))}
-
-        <div className="mt-2 flex flex-wrap gap-1">
-          {ACTOR_KINDS.map(({ kind, label }) => (
+        <SubLabel>Actors</SubLabel>
+        <div className="grid grid-cols-2 gap-1.5">
+          {ACTOR_KINDS.map(({ kind, label, cameraPos }) => (
             <button
               key={kind}
               onClick={() => onAddActor(kind)}
-              className="text-xs px-2 py-1 rounded-md bg-white/10 text-white/50 hover:bg-white/20 hover:text-white transition-all"
+              className="flex flex-col items-center gap-1 p-1.5 rounded-lg transition-all text-xs font-medium text-white/50 hover:bg-white/10 hover:text-white"
             >
-              + {label}
+              <div className="w-full aspect-square rounded-md overflow-hidden">
+                <ActorKindPreview kind={kind} cameraPos={cameraPos} />
+              </div>
+              {label}
             </button>
           ))}
         </div>
+
+        <div className="mt-2 flex flex-col gap-0.5">
+          <div
+            onClick={() => onSelectActor('ego')}
+            className={cn(
+              'flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-all',
+              selectedActorId === 'ego' ? 'bg-white/20 text-white' : 'text-white/50 hover:text-white hover:bg-white/10',
+            )}
+          >
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: '#22d3ee' }} />
+            <span className="flex-1 truncate">Car (ego)</span>
+          </div>
+
+          {scenario.actors.map(actor => (
+            <div
+              key={actor.id}
+              onClick={() => onSelectActor(actor.id)}
+              className={cn(
+                'flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-all group',
+                selectedActorId === actor.id ? 'bg-white/20 text-white' : 'text-white/50 hover:text-white hover:bg-white/10',
+              )}
+            >
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: actor.color }} />
+              <span className="flex-1 truncate">{actor.label}</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); onRemoveActor(actor.id); }}
+                className="opacity-0 group-hover:opacity-100 text-white/40 hover:text-white transition-all"
+                title="Remove actor"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <SubLabel>Scenery</SubLabel>
+        <p className="text-xs text-white/20 py-1 text-center">Coming soon</p>
+
       </Section>
     </div>
   );

@@ -6,7 +6,7 @@ interface Props {
   onSelect?: () => void;
 }
 
-function PedestrianMesh({ color }: { color: string }) {
+export function PedestrianMesh({ color }: { color: string }) {
   return (
     <group>
       {/* Body */}
@@ -23,7 +23,7 @@ function PedestrianMesh({ color }: { color: string }) {
   );
 }
 
-function StrollerMesh({ color }: { color: string }) {
+export function StrollerMesh({ color }: { color: string }) {
   return (
     <group>
       {/* Basket */}
@@ -40,7 +40,7 @@ function StrollerMesh({ color }: { color: string }) {
   );
 }
 
-function VehicleMesh({ color }: { color: string }) {
+export function VehicleMesh({ color }: { color: string }) {
   return (
     <group>
       {/* Body */}

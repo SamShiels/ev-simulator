@@ -1,4 +1,5 @@
 import type { RoadType } from '../App';
+import type { ActorKind } from '../scenario/types';
 
 // ── Inspected object types ──────────────────────────────────────────────────
 // Each variant carries all the data the inspector needs to display.
@@ -12,10 +13,15 @@ export interface InspectedTile {
   rotation: number; // 0–3, each step = 90°
 }
 
-// export interface InspectedActor { kind: 'actor'; id: string; ... }
-// export interface InspectedStatic { kind: 'static'; id: string; ... }
+export interface InspectedActor {
+  kind: 'actor';
+  id: string;
+  label: string;
+  actorKind: ActorKind;
+  color: string;
+}
 
-export type InspectedObject = InspectedTile;
+export type InspectedObject = InspectedTile | InspectedActor;
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
@@ -69,6 +75,29 @@ function TileInspector({ obj, onDelete }: { obj: InspectedTile; onDelete: () => 
   );
 }
 
+function ActorInspector({ obj }: { obj: InspectedActor }) {
+  const kindLabels: Record<ActorKind, string> = {
+    pedestrian: 'Pedestrian',
+    stroller: 'Stroller',
+    vehicle: 'Vehicle',
+  };
+
+  return (
+    <div>
+      <KindBadge label="Actor" />
+      <Field label="Name" value={obj.label} />
+      <Field label="Kind" value={kindLabels[obj.actorKind]} />
+      <div className="flex justify-between items-center py-0.5">
+        <span className="text-[11px] text-white/40">Color</span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-full inline-block" style={{ backgroundColor: obj.color }} />
+          <span className="text-[11px] text-white/80 font-mono">{obj.color}</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Inspector ──────────────────────────────────────────────────────────
 
 interface Props {
@@ -83,6 +112,10 @@ export default function Inspector({ object, onDelete }: Props) {
 
   if (object.kind === 'tile') {
     return <TileInspector obj={object} onDelete={onDelete} />;
+  }
+
+  if (object.kind === 'actor') {
+    return <ActorInspector obj={object} />;
   }
 
   return null;

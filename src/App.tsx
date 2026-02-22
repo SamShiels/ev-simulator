@@ -4,6 +4,8 @@ import Scene from './Scene';
 import Toolbar from './ui/Toolbar';
 import Sidebar from './ui/Sidebar';
 import Timeline from './ui/Timeline';
+import HintBar from './ui/HintBar';
+import InspectorPanel from './ui/InspectorPanel';
 import type { InspectedObject } from './ui/Inspector';
 import { defaultScenario, nextActorColor } from './scenario/defaults';
 import { evaluateTrack } from './scenario/interpolate';
@@ -13,6 +15,7 @@ import type { Scenario, Waypoint, WaypointTrack, Actor, ActorKind, ScenarioPose 
 
 export type RoadType = 'straight' | 'corner';
 export type GizmoMode = 'translate' | 'rotate';
+export type RenderPass = 'idle' | 'rgb' | 'depth';
 
 export interface Block {
   id: string;
@@ -43,7 +46,9 @@ export default function App() {
   const [selectedObject, setSelectedObject] = useState<SelectedObject>(null);
   const [gizmoMode, setGizmoMode] = useState<GizmoMode>('translate');
   const [playing, setPlaying] = useState(false);
-  const [rendering, setRendering] = useState(false);
+  const [renderPass, setRenderPass] = useState<RenderPass>('idle');
+  const [drawingPath, setDrawingPath] = useState(false);
+  const rendering = renderPass !== 'idle';
 
   // ── Scenario state ─────────────────────────────────────────────────────────
   const [scenario, setScenario] = useState<Scenario>(defaultScenario);
@@ -295,10 +300,9 @@ export default function App() {
     return evaluateTrack(scenario.egoTrack, scenarioTime);
   }, [scenario.egoTrack, scenarioTime]);
 
-  // ── Road inspector ─────────────────────────────────────────────────────────
+  // ── Inspector ──────────────────────────────────────────────────────────────
   const inspectedObject: InspectedObject | null = useMemo(() => {
-    if (!selectedObject) return null;
-    if (selectedObject.kind === 'tile') {
+    if (selectedObject?.kind === 'tile') {
       const block = blocks.find(b => b.id === selectedObject.id);
       if (!block) return null;
       return {
@@ -309,8 +313,19 @@ export default function App() {
         rotation: block.rotation,
       };
     }
+    if (selectedActorId && selectedActorId !== 'ego') {
+      const actor = scenario.actors.find(a => a.id === selectedActorId);
+      if (!actor) return null;
+      return {
+        kind: 'actor',
+        id: actor.id,
+        label: actor.label,
+        actorKind: actor.kind,
+        color: actor.color,
+      };
+    }
     return null;
-  }, [selectedObject, blocks]);
+  }, [selectedObject, blocks, selectedActorId, scenario.actors]);
 
   // ── Seed ego track from initial road on mount ─────────────────────────────
   useEffect(() => {
@@ -320,7 +335,26 @@ export default function App() {
 
   function handleRenderStart() {
     setScenarioTime(0);
-    setRendering(true);
+    setPlaying(false);
+    setRenderPass('rgb');
+  }
+
+  function handleRenderComplete() {
+    setRenderPass('idle');
+  }
+
+  function handleRgbFinished() {
+    setScenarioTime(0);
+    setRenderPass('depth');
+  }
+
+  function handleDepthFinished() {
+    // both passes done; renderPass already 'idle'
+  }
+
+  function handleSelectRoadType(type: RoadType | null) {
+    setSelectedRoadType(type);
+    if (type !== null) setDrawingPath(false);
   }
 
   return (
@@ -352,8 +386,11 @@ export default function App() {
             selectedActorId,
             selectedWaypointId,
             playing,
-            rendering,
-            onRenderComplete: () => setRendering(false),
+            renderPass,
+            drawingPath,
+            onRenderComplete: handleRenderComplete,
+            onRgbFinished: handleRgbFinished,
+            onDepthFinished: handleDepthFinished,
             onScenarioTimeChange: setScenarioTime,
             onAddWaypoint: addWaypoint,
             onMoveWaypoint: moveWaypoint,
@@ -367,16 +404,18 @@ export default function App() {
         gizmoMode={gizmoMode}
         playing={playing}
         rendering={rendering}
+        drawingPath={drawingPath}
         onGizmoModeChange={setGizmoMode}
         onPlayToggle={() => setPlaying(p => !p)}
         onRenderStart={handleRenderStart}
+        onDrawingPathToggle={() => setDrawingPath(d => !d)}
       />
+
+      <InspectorPanel inspectedObject={inspectedObject} onDelete={handleDelete} />
 
       <Sidebar
         selectedRoadType={selectedRoadType}
-        onSelect={setSelectedRoadType}
-        inspectedObject={inspectedObject}
-        onDelete={handleDelete}
+        onSelect={handleSelectRoadType}
         scenario={scenario}
         selectedActorId={selectedActorId}
         selectedWaypointId={selectedWaypointId}
@@ -384,6 +423,8 @@ export default function App() {
         onAddActor={addActor}
         onRemoveActor={removeActor}
       />
+
+      <HintBar selectedRoadType={selectedRoadType} drawingPath={drawingPath} />
 
       <Timeline
         scenario={scenario}

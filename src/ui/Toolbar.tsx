@@ -4,18 +4,22 @@ interface Props {
   gizmoMode: GizmoMode;
   playing: boolean;
   rendering: boolean;
+  drawingPath: boolean;
   onGizmoModeChange: (mode: GizmoMode) => void;
   onPlayToggle: () => void;
   onRenderStart: () => void;
+  onDrawingPathToggle: () => void;
 }
 
 export default function Toolbar({
   gizmoMode,
   playing,
   rendering,
+  drawingPath,
   onGizmoModeChange,
   onPlayToggle,
   onRenderStart,
+  onDrawingPathToggle,
 }: Props) {
   return (
     <div className="absolute top-4 left-1/2 -translate-x-1/2 flex gap-1 rounded-xl backdrop-blur-xl bg-white/10 shadow-2xl border border-white/15 p-1 z-10">
@@ -36,6 +40,22 @@ export default function Toolbar({
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
           <path d="M21.5 2v6h-6" />
           <path d="M21.34 15.57a10 10 0 1 1-.57-8.38" />
+        </svg>
+      </button>
+
+      <div className="w-px bg-white/20 mx-0.5" />
+
+      <button
+        title={drawingPath ? 'Stop drawing path' : 'Draw path'}
+        onClick={onDrawingPathToggle}
+        disabled={rendering || playing}
+        className={`p-2 rounded-lg transition-all disabled:opacity-30 disabled:pointer-events-none ${drawingPath ? 'bg-white/20 text-white' : 'text-white/40 hover:text-white hover:bg-white/10'}`}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="5" cy="12" r="2.5" fill="currentColor" stroke="none" />
+          <circle cx="19" cy="12" r="2.5" fill="currentColor" stroke="none" />
+          <circle cx="12" cy="6" r="2.5" fill="currentColor" stroke="none" />
+          <polyline points="5,12 12,6 19,12" strokeDasharray="2 2" />
         </svg>
       </button>
 

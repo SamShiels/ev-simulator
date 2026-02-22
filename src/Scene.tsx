@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
-import type { Block, RoadType, GizmoMode } from './App';
+import type { Block, RoadType, GizmoMode, RenderPass } from './App';
 import type { Scenario, ScenarioPose } from './scenario/types';
 import Car from './Car';
 import RoadTile from './visuals/RoadTile';
@@ -34,8 +34,11 @@ export interface ScenarioEditorProps {
   selectedActorId: string;
   selectedWaypointId: string | null;
   playing: boolean;
-  rendering: boolean;
+  renderPass: RenderPass;
+  drawingPath: boolean;
   onRenderComplete: () => void;
+  onRgbFinished: () => void;
+  onDepthFinished: () => void;
   onScenarioTimeChange: (t: number) => void;
   onAddWaypoint: (actorId: string, time: number, position: [number, number, number]) => void;
   onMoveWaypoint: (actorId: string, waypointId: string, position: [number, number, number]) => void;
@@ -56,10 +59,12 @@ export default function Scene({ roadEditor, scenarioEditor }: Props) {
   } = roadEditor;
   const {
     scenario, scenarioTime, scenarioPose, selectedActorId, selectedWaypointId,
-    playing, rendering,
-    onRenderComplete, onScenarioTimeChange, onAddWaypoint, onMoveWaypoint, onSelectWaypoint,
+    playing, renderPass, drawingPath,
+    onRenderComplete, onRgbFinished, onDepthFinished,
+    onScenarioTimeChange, onAddWaypoint, onMoveWaypoint, onSelectWaypoint,
     onSelectActor,
   } = scenarioEditor;
+  const rendering = renderPass !== 'idle';
   const { gl, camera } = useThree();
 
   const { ghost, isDraggingGizmoRef } = useSceneMouseControls({
@@ -68,6 +73,7 @@ export default function Scene({ roadEditor, scenarioEditor }: Props) {
     blocks,
     selectedId,
     selectedRoadType,
+    drawingPath,
     onPlace,
     onRotate,
     onSelectBlock,
@@ -78,7 +84,7 @@ export default function Scene({ roadEditor, scenarioEditor }: Props) {
   useScenarioMouseControls({
     gl,
     camera,
-    enabled: !selectedRoadType,
+    enabled: drawingPath && !selectedRoadType,
     scenarioTime,
     selectedActorId,
     onAddWaypoint,
@@ -197,12 +203,16 @@ export default function Scene({ roadEditor, scenarioEditor }: Props) {
         if (!track) return null;
         const pose = evaluateTrack(track, scenarioTime);
         if (!pose) return null;
+        function handleActorSelect() {
+          if (drawingPath) return;
+          onSelectActor(actor.id);
+        }
         return (
           <ActorMesh
             key={actor.id}
             actor={actor}
             pose={pose}
-            onSelect={() => onSelectActor(actor.id)}
+            onSelect={handleActorSelect}
           />
         );
       })}
