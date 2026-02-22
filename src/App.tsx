@@ -8,6 +8,8 @@ import Timeline from './ui/Timeline';
 import type { InspectedObject } from './ui/Inspector';
 import { defaultScenario, nextActorColor } from './scenario/defaults';
 import { evaluateTrack } from './scenario/interpolate';
+import { findRoadPath } from './road/pathfinder';
+import { getRoadWaypoints } from './road/roadCurve';
 import type { Scenario, Waypoint, WaypointTrack, Actor, ActorKind, ScenarioPose } from './scenario/types';
 
 export type RoadType = 'straight' | 'corner';
@@ -53,20 +55,38 @@ export default function App() {
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null);
   const [selectedActorId, setSelectedActorId] = useState<string>('ego');
 
+  // ── Sync ego track from road geometry ─────────────────────────────────────
+  function syncEgoTrackFromBlocks(currentBlocks: Block[]) {
+    const path = findRoadPath(currentBlocks);
+    if (!path) {
+      setScenario(s => ({ ...s, egoTrack: { actorId: 'ego', waypoints: [] } }));
+      return;
+    }
+    const pts = getRoadWaypoints(path);
+    const n = pts.length;
+    const dur = scenario.duration;
+    const waypoints: Waypoint[] = pts.map((pt, i) => ({
+      id: uid(),
+      time: n === 1 ? 0 : (i / (n - 1)) * dur,
+      position: [pt.x, pt.y, pt.z],
+    }));
+    setScenario(s => ({ ...s, egoTrack: { actorId: 'ego', waypoints } }));
+  }
+
   // ── Road editor handlers ───────────────────────────────────────────────────
   function placeBlock(pos: [number, number, number]) {
     if (!selectedRoadType) return;
     const occupied = blocks.some(b => b.position[0] === pos[0] && b.position[2] === pos[2]);
     if (occupied) return;
-    setBlocks(prev => [
-      ...prev,
-      {
-        id: `${pos[0]}-${pos[2]}-${Date.now()}`,
-        position: pos,
-        roadType: selectedRoadType,
-        rotation: ghostRotation,
-      },
-    ]);
+    const newBlock: Block = {
+      id: `${pos[0]}-${pos[2]}-${Date.now()}`,
+      position: pos,
+      roadType: selectedRoadType,
+      rotation: ghostRotation,
+    };
+    const newBlocks = [...blocks, newBlock];
+    setBlocks(newBlocks);
+    syncEgoTrackFromBlocks(newBlocks);
   }
 
   function rotate() {
@@ -84,13 +104,17 @@ export default function App() {
   function handleMoveBlock(id: string, newPos: [number, number, number]) {
     const occupied = blocks.some(b => b.id !== id && b.position[0] === newPos[0] && b.position[2] === newPos[2]);
     if (occupied) return;
-    setBlocks(prev => prev.map(b => b.id === id ? { ...b, position: newPos } : b));
+    const newBlocks = blocks.map(b => b.id === id ? { ...b, position: newPos } : b);
+    setBlocks(newBlocks);
+    syncEgoTrackFromBlocks(newBlocks);
   }
 
   function handleRotateBlock(id: string, delta: 1 | -1) {
-    setBlocks(prev => prev.map(b =>
+    const newBlocks = blocks.map(b =>
       b.id === id ? { ...b, rotation: ((b.rotation + delta) % 4 + 4) % 4 } : b,
-    ));
+    );
+    setBlocks(newBlocks);
+    syncEgoTrackFromBlocks(newBlocks);
   }
 
   function handleDelete() {
@@ -98,7 +122,9 @@ export default function App() {
     if (selectedObject.kind === 'tile') {
       const block = blocks.find(b => b.id === selectedObject.id);
       if (block && block.position[0] === 0 && block.position[2] === 0) return;
-      setBlocks(prev => prev.filter(b => b.id !== selectedObject.id));
+      const newBlocks = blocks.filter(b => b.id !== selectedObject.id);
+      setBlocks(newBlocks);
+      syncEgoTrackFromBlocks(newBlocks);
     }
     setSelectedObject(null);
   }
@@ -194,11 +220,10 @@ export default function App() {
     setScenario(s => ({ ...s, duration: Math.max(1, duration) }));
   }
 
-  // ── Derived: ego car pose in scenario mode ─────────────────────────────────
+  // ── Derived: ego car pose (always — car follows waypoints in both modes) ────
   const scenarioPose: ScenarioPose | null = useMemo(() => {
-    if (appMode !== 'scenario') return null;
     return evaluateTrack(scenario.egoTrack, scenarioTime);
-  }, [appMode, scenario.egoTrack, scenarioTime]);
+  }, [scenario.egoTrack, scenarioTime]);
 
   // ── Road inspector ─────────────────────────────────────────────────────────
   const inspectedObject: InspectedObject | null = useMemo(() => {
@@ -217,10 +242,21 @@ export default function App() {
     return null;
   }, [selectedObject, blocks]);
 
+  // ── Sync ego track from initial road ──────────────────────────────────────
+  useEffect(() => {
+    syncEgoTrackFromBlocks(blocks);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Mode change: stop playback on switch ───────────────────────────────────
   function handleAppModeChange(mode: AppMode) {
     setPlaying(false);
     setAppMode(mode);
+  }
+
+  function handleRenderStart() {
+    setScenarioTime(0);
+    setRendering(true);
   }
 
   return (
@@ -267,7 +303,7 @@ export default function App() {
         onAppModeChange={handleAppModeChange}
         onGizmoModeChange={setGizmoMode}
         onPlayToggle={() => setPlaying(p => !p)}
-        onRenderStart={() => setRendering(true)}
+        onRenderStart={handleRenderStart}
       />
 
       <Sidebar

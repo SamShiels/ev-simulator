@@ -8,45 +8,15 @@ import type { ScenarioPose } from './scenario/types';
 const MTL = '/assets/car/sedan-sports.mtl';
 const OBJ = '/assets/car/sedan-sports.obj';
 
-// World units per second along the curve
-const SPEED = 6;
-
-// 1. Suspension roll / pitch tuning
-const ROLL_STRENGTH = 0.001;   // radians of body roll per unit of signed curvature
-const ROLL_SMOOTHING = 2.5;   // lerp rate — lower = heavier, slower suspension lag
-const PITCH_STRENGTH = 0.3;   // fraction of road gradient expressed as body pitch
+// Suspension tuning
+const ROLL_SMOOTHING  = 2.5;
+const PITCH_STRENGTH  = 0.3;
 const PITCH_SMOOTHING = 2.0;
-
-// 2. Lateral lane-wander tuning
-const DRIFT_AMPLITUDE = 0.1; // max lateral offset in world units
-const DRIFT_FREQUENCY = 0.28; // cycles per second of the wander sine wave
-
-// 3. Corner speed tuning
-const LOOK_AHEAD      = 0.01;  // fraction of curve to look ahead when anticipating corners
-const CORNER_SLOWDOWN = 0.02;  // speed reduction per unit of curvature magnitude
-const MIN_SPEED_FACTOR = 0.35; // never drop below this fraction of SPEED
-const SPEED_BRAKE     = 5.0;   // lerp rate when decelerating (fast — commit to the corner)
-const SPEED_ACCEL     = 1.8;   // lerp rate when accelerating (slow — gradual power-on)
 
 // Dashcam height above the car's world origin
 const DASHCAM_HEIGHT = 0.5;
 
-// Reused across frames to avoid per-frame allocation
-const _cross = new THREE.Vector3();
-
-interface Props {
-  curve: THREE.Curve<THREE.Vector3> | null;
-  scenarioPose: ScenarioPose | null;
-  playing: boolean;
-  rendering: boolean;
-  onRenderComplete: () => void;
-}
-
-/**
- * Multi-sine road-noise for the vertical (Y) axis.
- * Incommensurate frequencies prevent any visible periodicity.
- * Amplitude is barely perceptible — just enough for a natural "buzz".
- */
+// Multi-sine road-noise for the vertical (Y) axis
 function roadNoiseY(t: number): number {
   return (
     Math.sin(t * 23.7) * 0.0030 +
@@ -56,24 +26,26 @@ function roadNoiseY(t: number): number {
   );
 }
 
-function Model({ curve, scenarioPose, playing, rendering, onRenderComplete }: Props) {
+interface Props {
+  scenarioPose: ScenarioPose | null;
+  rendering: boolean;
+}
+
+function Model({ scenarioPose, rendering }: Props) {
   const materials = useLoader(MTLLoader, MTL);
   const obj = useLoader(OBJLoader, OBJ, loader => {
     materials.preload();
     loader.setMaterials(materials);
   });
 
-  // Clone once so the cached loader object isn't mutated by the scene graph
   const clone = useMemo(() => obj.clone(), [obj]);
 
-  const groupRef = useRef<THREE.Group>(null); // world position + Y yaw
-  const bodyRef  = useRef<THREE.Group>(null); // local pitch / roll / noise-Y
+  const groupRef = useRef<THREE.Group>(null);
+  const bodyRef  = useRef<THREE.Group>(null);
 
-  const tRef     = useRef(0);
-  const timeRef  = useRef(0);
-  const rollRef  = useRef(0);
-  const pitchRef = useRef(0);
-  const speedRef = useRef(SPEED);
+  const timeRef    = useRef(0);
+  const rollRef    = useRef(0);
+  const pitchRef   = useRef(0);
   const prevPosRef = useRef<THREE.Vector3 | null>(null);
 
   // ── Dashcam camera ─────────────────────────────────────────────────────────
@@ -81,12 +53,10 @@ function Model({ curve, scenarioPose, playing, rendering, onRenderComplete }: Pr
 
   const dashCam = useMemo(() => {
     const cam = new THREE.PerspectiveCamera(85, size.width / size.height, 0.1, 1000);
-    // 'YXZ' order: yaw first, then pitch, then roll — standard for a vehicle camera
     cam.rotation.order = 'YXZ';
     return cam;
   }, []);
 
-  // Keep aspect ratio in sync with canvas size
   useEffect(() => {
     dashCam.aspect = size.width / size.height;
     dashCam.updateProjectionMatrix();
@@ -96,7 +66,6 @@ function Model({ curve, scenarioPose, playing, rendering, onRenderComplete }: Pr
 
   useEffect(() => {
     if (rendering) {
-      tRef.current  = 0;
       timeRef.current = 0;
       prevCameraRef.current = get().camera;
       set({ camera: dashCam });
@@ -111,117 +80,36 @@ function Model({ curve, scenarioPose, playing, rendering, onRenderComplete }: Pr
 
   useFrame((_, delta) => {
     if (!groupRef.current || !bodyRef.current) return;
+    if (!scenarioPose) return;
 
     timeRef.current += delta;
     const time = timeRef.current;
 
-    // ── Scenario mode: position driven by external pose ─────────────────────
-    if (scenarioPose) {
-      const [px, py, pz] = scenarioPose.position;
-      const pos = new THREE.Vector3(px, py, pz);
+    const [px, py, pz] = scenarioPose.position;
+    const pos = new THREE.Vector3(px, py, pz);
 
-      // Derive a synthetic tangent from the previous position for suspension
-      const prev = prevPosRef.current;
-      const tangent = prev && pos.distanceTo(prev) > 0.0001
-        ? pos.clone().sub(prev).normalize()
-        : new THREE.Vector3(0, 0, 1);
-      prevPosRef.current = pos.clone();
-
-      groupRef.current.position.copy(pos);
-      groupRef.current.rotation.y = scenarioPose.yaw;
-
-      const eps = 0.001;
-      const nextPos = pos.clone().addScaledVector(tangent, eps);
-      const syntheticNext = nextPos.sub(pos).normalize();
-      _cross.crossVectors(tangent, syntheticNext);
-
-      const targetRoll = 0; // no curvature data in scenario mode
-      rollRef.current = THREE.MathUtils.lerp(rollRef.current, targetRoll, delta * ROLL_SMOOTHING);
-
-      const targetPitch = -Math.asin(THREE.MathUtils.clamp(tangent.y, -1, 1)) * PITCH_STRENGTH;
-      pitchRef.current = THREE.MathUtils.lerp(pitchRef.current, targetPitch, delta * PITCH_SMOOTHING);
-
-      const noiseY = roadNoiseY(time);
-      bodyRef.current.rotation.x = pitchRef.current;
-      bodyRef.current.rotation.z = rollRef.current;
-      bodyRef.current.position.y = noiseY;
-      return;
-    }
-
-    // ── Road mode: spline-following ─────────────────────────────────────────
-    if (!curve) return;
-
-    prevPosRef.current = null;
-
-    const isActive = playing || rendering;
-    if (!isActive) {
-      tRef.current = 0;
-      return;
-    }
-
-    const len = curve.getLength();
-
-    // ── Corner speed: sample curvature at look-ahead before advancing t ──────
-    const eps = 0.002;
-    const tLook      = (tRef.current + LOOK_AHEAD) % 1;
-    const tanLook    = curve.getTangent(tLook);
-    const tanLookFwd = curve.getTangent((tLook + eps) % 1);
-    _cross.crossVectors(tanLook, tanLookFwd);
-    const lookCurvature  = Math.abs(_cross.y) / eps;
-    const targetSpeedFactor = Math.max(MIN_SPEED_FACTOR, 1 - lookCurvature * CORNER_SLOWDOWN);
-    const targetSpeed = SPEED * targetSpeedFactor;
-    const lerpRate = targetSpeed < speedRef.current ? SPEED_BRAKE : SPEED_ACCEL;
-    speedRef.current = THREE.MathUtils.lerp(speedRef.current, targetSpeed, delta * lerpRate);
-
-    // Advance t — rendering stops at the end of the road instead of looping
-    const step = (speedRef.current / len) * delta;
-
-    if (rendering) {
-      if (tRef.current + step >= 1) {
-        onRenderComplete();
-        return;
-      }
-      tRef.current += step;
-    } else {
-      tRef.current = (tRef.current + step) % 1;
-    }
-
-    const t = tRef.current;
-
-    // ── Position & heading ──────────────────────────────────────────────────
-    const pos     = curve.getPoint(t);
-    const tangent = curve.getTangent(t);
-
-    // Right vector perpendicular to travel direction in the XZ plane
-    const right = new THREE.Vector3(tangent.z, 0, -tangent.x);
-
-    // Imperfect steering — slow sine wave lateral drift within the lane
-    const lateralDrift = Math.sin(time * Math.PI * 2 * DRIFT_FREQUENCY) * DRIFT_AMPLITUDE;
-    pos.addScaledVector(right, lateralDrift);
+    // Derive tangent from frame-to-frame displacement for suspension
+    const prev = prevPosRef.current;
+    const tangent = prev && pos.distanceTo(prev) > 0.0001
+      ? pos.clone().sub(prev).normalize()
+      : new THREE.Vector3(0, 0, 1);
+    prevPosRef.current = pos.clone();
 
     groupRef.current.position.copy(pos);
-    groupRef.current.rotation.y = Math.atan2(tangent.x, tangent.z);
-
-    // ── 1. Suspension roll from spline curvature ────────────────────────────
-    const nextTangent = curve.getTangent((t + eps) % 1);
-    _cross.crossVectors(tangent, nextTangent);
-    const signedCurvature = _cross.y / eps;
-    const targetRoll = signedCurvature * ROLL_STRENGTH;
-    rollRef.current = THREE.MathUtils.lerp(rollRef.current, targetRoll, delta * ROLL_SMOOTHING);
+    groupRef.current.rotation.y = scenarioPose.yaw;
 
     const targetPitch = -Math.asin(THREE.MathUtils.clamp(tangent.y, -1, 1)) * PITCH_STRENGTH;
     pitchRef.current = THREE.MathUtils.lerp(pitchRef.current, targetPitch, delta * PITCH_SMOOTHING);
+    rollRef.current  = THREE.MathUtils.lerp(rollRef.current, 0, delta * ROLL_SMOOTHING);
 
-    // ── 2. Road-noise micro-vibration on the vertical axis ──────────────────
     const noiseY = roadNoiseY(time);
     bodyRef.current.rotation.x = pitchRef.current;
     bodyRef.current.rotation.z = rollRef.current;
     bodyRef.current.position.y = noiseY;
 
-    // ── Dashcam: position and orient in world space ─────────────────────────
     if (rendering) {
-      dashCam.position.set(pos.x, pos.y + DASHCAM_HEIGHT + noiseY, pos.z);
-      dashCam.rotation.y = Math.atan2(tangent.x, tangent.z) + Math.PI;
+      dashCam.position.set(px, py + DASHCAM_HEIGHT + noiseY, pz);
+      dashCam.rotation.y = scenarioPose.yaw + Math.PI;
       dashCam.rotation.x = pitchRef.current;
       dashCam.rotation.z = -rollRef.current;
     }
@@ -236,10 +124,10 @@ function Model({ curve, scenarioPose, playing, rendering, onRenderComplete }: Pr
   );
 }
 
-export default function Car({ curve, scenarioPose, playing, rendering, onRenderComplete }: Props) {
+export default function Car({ scenarioPose, rendering }: Props) {
   return (
     <Suspense fallback={null}>
-      <Model curve={curve} scenarioPose={scenarioPose} playing={playing} rendering={rendering} onRenderComplete={onRenderComplete} />
+      <Model scenarioPose={scenarioPose} rendering={rendering} />
     </Suspense>
   );
 }

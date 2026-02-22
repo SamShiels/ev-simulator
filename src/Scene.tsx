@@ -1,17 +1,14 @@
-import { useEffect, useMemo } from 'react';
-import { useThree } from '@react-three/fiber';
+import { useEffect, useRef } from 'react';
+import { useThree, useFrame } from '@react-three/fiber';
 import type { Block, RoadType, GizmoMode } from './App';
 import type { AppMode } from './ui/Toolbar';
 import type { Scenario, ScenarioPose } from './scenario/types';
 import Car from './Car';
-import CurveLine from './visuals/CurveLine';
 import RoadTile from './visuals/RoadTile';
 import SelectionGizmo from './visuals/SelectionGizmo';
 import WaypointMarker from './visuals/WaypointMarker';
 import TrackLine from './visuals/TrackLine';
 import ActorMesh from './visuals/ActorMesh';
-import { findRoadPath } from './road/pathfinder';
-import { buildRoadCurve } from './road/roadCurve';
 import { evaluateTrack } from './scenario/interpolate';
 import { useSceneMouseControls } from './hooks/useSceneMouseControls';
 import { useScenarioMouseControls } from './hooks/useScenarioMouseControls';
@@ -96,14 +93,37 @@ export default function Scene({
     onScenarioTimeChange,
   });
 
-  const roadCurve = useMemo(() => {
-    const result = findRoadPath(blocks);
-    return result ? buildRoadCurve(result) : null;
-  }, [blocks]);
-
   useEffect(() => {
     camera.lookAt(0, 0, 0);
   }, [camera]);
+
+  // ── Time advancement ────────────────────────────────────────────────────────
+  // Use refs so the useFrame callback always reads the latest prop values
+  // without needing to be recreated each render.
+  const playingRef     = useRef(playing);
+  const renderingRef   = useRef(rendering);
+  const scenarioTimeRef = useRef(scenarioTime);
+  const durationRef    = useRef(scenario.duration);
+
+  playingRef.current      = playing;
+  renderingRef.current    = rendering;
+  scenarioTimeRef.current = scenarioTime;
+  durationRef.current     = scenario.duration;
+
+  useFrame((_, delta) => {
+    if (!playingRef.current && !renderingRef.current) return;
+    const next = scenarioTimeRef.current + delta;
+    if (renderingRef.current) {
+      if (next >= durationRef.current) {
+        onRenderComplete();
+      } else {
+        onScenarioTimeChange(next);
+      }
+    } else {
+      // playing: loop back to 0 at the end
+      onScenarioTimeChange(next % durationRef.current);
+    }
+  });
 
   const selectedBlock = selectedId ? blocks.find(b => b.id === selectedId) ?? null : null;
 
@@ -118,13 +138,9 @@ export default function Scene({
       <directionalLight position={[10, 20, 10]} intensity={1} />
       <gridHelper args={[30, 30, '#444', '#2a2a2a']} />
 
-      <CurveLine curve={roadCurve} />
       <Car
-        curve={roadCurve}
         scenarioPose={scenarioPose}
-        playing={playing}
         rendering={rendering}
-        onRenderComplete={onRenderComplete}
       />
 
       {/* Road tiles */}
