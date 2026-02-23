@@ -1,31 +1,22 @@
-import type { GizmoMode } from '../App';
+import { useEditorStore } from '../store/useEditorStore';
 
-interface Props {
-  gizmoMode: GizmoMode;
-  playing: boolean;
-  rendering: boolean;
-  drawingPath: boolean;
-  onGizmoModeChange: (mode: GizmoMode) => void;
-  onPlayToggle: () => void;
-  onRenderStart: () => void;
-  onDrawingPathToggle: () => void;
-}
+export default function Toolbar() {
+  const gizmoMode = useEditorStore(s => s.gizmoMode);
+  const playing = useEditorStore(s => s.playing);
+  const renderPass = useEditorStore(s => s.renderPass);
+  const drawingPath = useEditorStore(s => s.drawingPath);
+  const setGizmoMode = useEditorStore(s => s.setGizmoMode);
+  const togglePlaying = useEditorStore(s => s.togglePlaying);
+  const startRender = useEditorStore(s => s.startRender);
+  const toggleDrawingPath = useEditorStore(s => s.toggleDrawingPath);
 
-export default function Toolbar({
-  gizmoMode,
-  playing,
-  rendering,
-  drawingPath,
-  onGizmoModeChange,
-  onPlayToggle,
-  onRenderStart,
-  onDrawingPathToggle,
-}: Props) {
+  const rendering = renderPass !== 'idle';
+
   return (
     <div className="absolute top-4 left-1/2 -translate-x-1/2 flex gap-1 rounded-xl backdrop-blur-xl bg-white/10 shadow-2xl border border-white/15 p-1 z-10">
       <button
         title="Move"
-        onClick={() => onGizmoModeChange('translate')}
+        onClick={() => setGizmoMode('translate')}
         className={`p-2 rounded-lg transition-all ${gizmoMode === 'translate' ? 'bg-white/20 text-white' : 'text-white/40 hover:text-white hover:bg-white/10'}`}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -34,7 +25,7 @@ export default function Toolbar({
       </button>
       <button
         title="Rotate"
-        onClick={() => onGizmoModeChange('rotate')}
+        onClick={() => setGizmoMode('rotate')}
         className={`p-2 rounded-lg transition-all ${gizmoMode === 'rotate' ? 'bg-white/20 text-white' : 'text-white/40 hover:text-white hover:bg-white/10'}`}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -47,7 +38,7 @@ export default function Toolbar({
 
       <button
         title={drawingPath ? 'Stop drawing path' : 'Draw path'}
-        onClick={onDrawingPathToggle}
+        onClick={toggleDrawingPath}
         disabled={rendering || playing}
         className={`p-2 rounded-lg transition-all disabled:opacity-30 disabled:pointer-events-none ${drawingPath ? 'bg-white/20 text-white' : 'text-white/40 hover:text-white hover:bg-white/10'}`}
       >
@@ -63,7 +54,7 @@ export default function Toolbar({
 
       <button
         title={playing ? 'Stop' : 'Play'}
-        onClick={onPlayToggle}
+        onClick={togglePlaying}
         disabled={rendering}
         className="p-2 rounded-lg transition-all text-white/40 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:pointer-events-none"
       >
@@ -80,7 +71,7 @@ export default function Toolbar({
 
       <button
         title="Render"
-        onClick={onRenderStart}
+        onClick={startRender}
         disabled={rendering || playing}
         className="p-2 rounded-lg transition-all text-white/40 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:pointer-events-none"
       >

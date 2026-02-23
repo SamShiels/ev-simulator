@@ -10,11 +10,12 @@ interface Options {
   selectedActorId: string;
   onAddWaypoint: (actorId: string, time: number, position: [number, number, number]) => void;
   onScenarioTimeChange: (t: number) => void;
+  onCursorMove?: (pos: [number, number, number] | null) => void;
 }
 
 export function useScenarioMouseControls({
-  gl, camera, enabled, scenarioTime, selectedActorId, 
-  onAddWaypoint
+  gl, camera, enabled, scenarioTime, selectedActorId,
+  onAddWaypoint, onCursorMove
 }: Options) {
   const state = useRef({ scenarioTime, selectedActorId });
   state.current = { scenarioTime, selectedActorId };
@@ -27,9 +28,12 @@ export function useScenarioMouseControls({
       onAddWaypoint(
         state.current.selectedActorId,
         state.current.scenarioTime,
-        [pos.x, 0, pos.z] // Cast back to tuple for your data model
+        [pos.x, 0, pos.z],
       );
     },
-    onContextMenu: (e) => e.preventDefault()
+    onGroundMove: onCursorMove
+      ? (pos) => onCursorMove(pos ? [pos.x, 0, pos.z] : null)
+      : undefined,
+    onContextMenu: (e) => e.preventDefault(),
   });
 }

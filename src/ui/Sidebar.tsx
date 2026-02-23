@@ -2,20 +2,10 @@ import { Canvas } from '@react-three/fiber';
 import { Suspense, useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { RoadType } from '../App';
-import type { Scenario, ActorKind } from '../scenario/types';
+import type { ActorKind } from '../scenario/types';
 import { RoadTileModel } from '../visuals/RoadTile';
 import { PedestrianMesh, StrollerMesh, VehicleMesh } from '../visuals/ActorMesh';
-
-interface Props {
-  selectedRoadType: RoadType | null;
-  onSelect: (type: RoadType | null) => void;
-  scenario: Scenario;
-  selectedActorId: string;
-  selectedWaypointId: string | null;
-  onSelectActor: (id: string) => void;
-  onAddActor: (kind: ActorKind) => void;
-  onRemoveActor: (id: string) => void;
-}
+import { useEditorStore } from '../store/useEditorStore';
 
 const ROAD_TYPES: { type: RoadType; label: string }[] = [
   { type: 'straight', label: 'Straight' },
@@ -86,7 +76,6 @@ function Section({ title, defaultOpen = true, children }: { title: string; defau
   );
 }
 
-
 function SubLabel({ children }: { children: string }) {
   return (
     <p className="text-[10px] font-semibold tracking-widest uppercase text-white/30 mt-3 mb-1">
@@ -95,17 +84,17 @@ function SubLabel({ children }: { children: string }) {
   );
 }
 
-export default function Sidebar({
-  selectedRoadType,
-  onSelect,
-  scenario,
-  selectedActorId,
-  onSelectActor,
-  onAddActor,
-  onRemoveActor,
-}: Props) {
+export default function Sidebar() {
+  const selectedRoadType = useEditorStore(s => s.selectedRoadType);
+  const scenario = useEditorStore(s => s.scenario);
+  const selectedActorId = useEditorStore(s => s.selectedActorId);
+  const selectRoadType = useEditorStore(s => s.selectRoadType);
+  const selectActor = useEditorStore(s => s.selectActor);
+  const addActor = useEditorStore(s => s.addActor);
+  const removeActor = useEditorStore(s => s.removeActor);
+
   function handleTileClick(type: RoadType) {
-    onSelect(selectedRoadType === type ? null : type);
+    selectRoadType(selectedRoadType === type ? null : type);
   }
 
   return (
@@ -138,7 +127,7 @@ export default function Sidebar({
           {ACTOR_KINDS.map(({ kind, label, cameraPos }) => (
             <button
               key={kind}
-              onClick={() => onAddActor(kind)}
+              onClick={() => addActor(kind)}
               className="flex flex-col items-center gap-1 p-1.5 rounded-lg transition-all text-xs font-medium text-white/50 hover:bg-white/10 hover:text-white"
             >
               <div className="w-full aspect-square rounded-md overflow-hidden">
@@ -151,7 +140,7 @@ export default function Sidebar({
 
         <div className="mt-2 flex flex-col gap-0.5">
           <div
-            onClick={() => onSelectActor('ego')}
+            onClick={() => selectActor('ego')}
             className={cn(
               'flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-all',
               selectedActorId === 'ego' ? 'bg-white/20 text-white' : 'text-white/50 hover:text-white hover:bg-white/10',
@@ -164,7 +153,7 @@ export default function Sidebar({
           {scenario.actors.map(actor => (
             <div
               key={actor.id}
-              onClick={() => onSelectActor(actor.id)}
+              onClick={() => selectActor(actor.id)}
               className={cn(
                 'flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-all group',
                 selectedActorId === actor.id ? 'bg-white/20 text-white' : 'text-white/50 hover:text-white hover:bg-white/10',
@@ -173,7 +162,7 @@ export default function Sidebar({
               <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: actor.color }} />
               <span className="flex-1 truncate">{actor.label}</span>
               <button
-                onClick={(e) => { e.stopPropagation(); onRemoveActor(actor.id); }}
+                onClick={(e) => { e.stopPropagation(); removeActor(actor.id); }}
                 className="opacity-0 group-hover:opacity-100 text-white/40 hover:text-white transition-all"
                 title="Remove actor"
               >

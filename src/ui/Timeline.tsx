@@ -1,18 +1,5 @@
 import { useRef } from 'react';
-import type { Scenario } from '../scenario/types';
-
-interface Props {
-  scenario: Scenario;
-  scenarioTime: number;
-  playing: boolean;
-  selectedActorId: string;
-  selectedWaypointId: string | null;
-  onScrub: (t: number) => void;
-  onSetDuration: (d: number) => void;
-  onSelectActor: (actorId: string) => void;
-  onSelectWaypoint: (actorId: string, waypointId: string) => void;
-  onWaypointTimeChange: (actorId: string, waypointId: string, time: number) => void;
-}
+import { useEditorStore } from '../store/useEditorStore';
 
 function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v));
@@ -72,12 +59,10 @@ function Lane({
       className={`flex items-center h-8 border-b border-white/5 ${isSelected ? 'bg-white/5' : ''}`}
       onClick={onSelectActor}
     >
-      {/* Label */}
       <div className="w-28 shrink-0 px-3 text-xs truncate" style={{ color: isSelected ? '#fff' : '#ffffff80' }}>
         {label}
       </div>
 
-      {/* Waypoint diamonds */}
       <div ref={laneRef} className="flex-1 relative h-full">
         {waypoints.map(wp => {
           const pct = clamp(wp.time / duration, 0, 1) * 100;
@@ -100,18 +85,20 @@ function Lane({
   );
 }
 
-export default function Timeline({
-  scenario,
-  scenarioTime,
-  selectedActorId,
-  selectedWaypointId,
-  onScrub,
-  onSetDuration,
-  onSelectActor,
-  onSelectWaypoint,
-  onWaypointTimeChange,
-}: Props) {
+export default function Timeline() {
+  const scenario = useEditorStore(s => s.scenario);
+  const scenarioTime = useEditorStore(s => s.scenarioTime);
+  const selectedActorId = useEditorStore(s => s.selectedActorId);
+  const selectedWaypointId = useEditorStore(s => s.selectedWaypointId);
+  const setScenarioTime = useEditorStore(s => s.setScenarioTime);
+  const setDuration = useEditorStore(s => s.setDuration);
+  const selectActor = useEditorStore(s => s.selectActor);
+  const setWaypointTime = useEditorStore(s => s.setWaypointTime);
   const scrubRef = useRef<HTMLDivElement>(null);
+
+  function selectWaypoint(actorId: string, waypointId: string) {
+    useEditorStore.setState({ selectedActorId: actorId, selectedWaypointId: waypointId });
+  }
 
   function startScrub(e: React.PointerEvent) {
     scrub(e.nativeEvent);
@@ -121,7 +108,7 @@ export default function Timeline({
       if (!bar) return;
       const rect = bar.getBoundingClientRect();
       const frac = clamp((ev.clientX - rect.left) / rect.width, 0, 1);
-      onScrub(frac * scenario.duration);
+      setScenarioTime(frac * scenario.duration);
     }
 
     function handleMove(ev: PointerEvent) { scrub(ev); }
@@ -135,7 +122,6 @@ export default function Timeline({
   }
 
   const egoWaypoints = scenario.egoTrack.waypoints.map(w => ({ id: w.id, time: w.time }));
-
   const playheadPct = clamp(scenarioTime / scenario.duration, 0, 1) * 100;
 
   return (
@@ -168,9 +154,9 @@ export default function Timeline({
         duration={scenario.duration}
         selectedActorId={selectedActorId}
         selectedWaypointId={selectedWaypointId}
-        onSelectActor={() => onSelectActor('ego')}
-        onSelectWaypoint={(wpId) => onSelectWaypoint('ego', wpId)}
-        onWaypointTimeChange={(wpId, t) => onWaypointTimeChange('ego', wpId, t)}
+        onSelectActor={() => selectActor('ego')}
+        onSelectWaypoint={(wpId) => selectWaypoint('ego', wpId)}
+        onWaypointTimeChange={(wpId, t) => setWaypointTime('ego', wpId, t)}
       />
 
       {scenario.actors.map(actor => {
@@ -186,9 +172,9 @@ export default function Timeline({
             duration={scenario.duration}
             selectedActorId={selectedActorId}
             selectedWaypointId={selectedWaypointId}
-            onSelectActor={() => onSelectActor(actor.id)}
-            onSelectWaypoint={(wpId) => onSelectWaypoint(actor.id, wpId)}
-            onWaypointTimeChange={(wpId, t) => onWaypointTimeChange(actor.id, wpId, t)}
+            onSelectActor={() => selectActor(actor.id)}
+            onSelectWaypoint={(wpId) => selectWaypoint(actor.id, wpId)}
+            onWaypointTimeChange={(wpId, t) => setWaypointTime(actor.id, wpId, t)}
           />
         );
       })}
@@ -203,7 +189,7 @@ export default function Timeline({
             min={1}
             max={300}
             value={scenario.duration}
-            onChange={e => onSetDuration(Number(e.target.value))}
+            onChange={e => setDuration(Number(e.target.value))}
             className="w-14 bg-white/10 rounded px-1.5 py-0.5 text-white text-xs font-mono"
           />
           <span>s</span>

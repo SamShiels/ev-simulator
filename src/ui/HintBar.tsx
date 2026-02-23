@@ -1,11 +1,9 @@
-import type { RoadType } from '../App';
+import { useEditorStore } from '../store/useEditorStore';
 
-interface Props {
-  selectedRoadType: RoadType | null;
-  drawingPath: boolean;
-}
+export default function HintBar() {
+  const selectedRoadType = useEditorStore(s => s.selectedRoadType);
+  const drawingPath = useEditorStore(s => s.drawingPath);
 
-export default function HintBar({ selectedRoadType, drawingPath }: Props) {
   let hint: string;
   if (selectedRoadType) {
     hint = 'Click to place · R to rotate · Right-click to cancel';

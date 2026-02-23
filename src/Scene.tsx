@@ -1,7 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
-import type { Block, RoadType, GizmoMode, RenderPass } from './App';
-import type { Scenario, ScenarioPose } from './scenario/types';
 import Car from './Car';
 import RoadTile from './visuals/RoadTile';
 import SelectionGizmo from './visuals/SelectionGizmo';
@@ -11,61 +9,48 @@ import ActorMesh from './visuals/ActorMesh';
 import { evaluateTrack } from './scenario/interpolate';
 import { useSceneMouseControls } from './hooks/useSceneMouseControls';
 import { useScenarioMouseControls } from './hooks/useScenarioMouseControls';
+import { useEditorStore } from './store/useEditorStore';
 
-export interface RoadEditorProps {
-  blocks: Block[];
-  selectedRoadType: RoadType | null;
-  ghostRotation: number;
-  selectedId: string | null;
-  gizmoMode: GizmoMode;
-  onPlace: (pos: [number, number, number]) => void;
-  onRotate: () => void;
-  onSelectBlock: (id: string) => void;
-  onDeselect: () => void;
-  onCancelPlacement: () => void;
-  onMoveBlock: (id: string, newPos: [number, number, number]) => void;
-  onRotateBlock: (id: string, delta: 1 | -1) => void;
-}
+const GHOST_WP_POLE_HEIGHT = 0.6;
+const GHOST_WP_SPHERE_RADIUS = 0.18;
+const GHOST_WP_POLE_RADIUS = 0.04;
 
-export interface ScenarioEditorProps {
-  scenario: Scenario;
-  scenarioTime: number;
-  scenarioPose: ScenarioPose | null;
-  selectedActorId: string;
-  selectedWaypointId: string | null;
-  playing: boolean;
-  renderPass: RenderPass;
-  drawingPath: boolean;
-  onRenderComplete: () => void;
-  onRgbFinished: () => void;
-  onDepthFinished: () => void;
-  onScenarioTimeChange: (t: number) => void;
-  onAddWaypoint: (actorId: string, time: number, position: [number, number, number]) => void;
-  onMoveWaypoint: (actorId: string, waypointId: string, position: [number, number, number]) => void;
-  onSelectWaypoint: (waypointId: string | null) => void;
-  onSelectActor: (actorId: string) => void;
-}
+export default function Scene() {
+  const blocks = useEditorStore(s => s.blocks);
+  const selectedRoadType = useEditorStore(s => s.selectedRoadType);
+  const ghostRotation = useEditorStore(s => s.ghostRotation);
+  const selectedObject = useEditorStore(s => s.selectedObject);
+  const gizmoMode = useEditorStore(s => s.gizmoMode);
+  const scenario = useEditorStore(s => s.scenario);
+  const scenarioTime = useEditorStore(s => s.scenarioTime);
+  const selectedActorId = useEditorStore(s => s.selectedActorId);
+  const selectedWaypointId = useEditorStore(s => s.selectedWaypointId);
+  const playing = useEditorStore(s => s.playing);
+  const renderPass = useEditorStore(s => s.renderPass);
+  const drawingPath = useEditorStore(s => s.drawingPath);
 
-interface Props {
-  roadEditor: RoadEditorProps;
-  scenarioEditor: ScenarioEditorProps;
-}
+  const placeBlock = useEditorStore(s => s.placeBlock);
+  const rotateGhost = useEditorStore(s => s.rotateGhost);
+  const selectBlock = useEditorStore(s => s.selectBlock);
+  const deselectBlock = useEditorStore(s => s.deselectBlock);
+  const selectRoadType = useEditorStore(s => s.selectRoadType);
+  const moveBlock = useEditorStore(s => s.moveBlock);
+  const rotateBlock = useEditorStore(s => s.rotateBlock);
+  const addWaypoint = useEditorStore(s => s.addWaypoint);
+  const moveWaypoint = useEditorStore(s => s.moveWaypoint);
+  const setScenarioTime = useEditorStore(s => s.setScenarioTime);
+  const setRenderPass = useEditorStore(s => s.setRenderPass);
+  const selectActor = useEditorStore(s => s.selectActor);
 
-export default function Scene({ roadEditor, scenarioEditor }: Props) {
-  const {
-    blocks, selectedRoadType, ghostRotation, selectedId, gizmoMode,
-    onPlace, onRotate, onSelectBlock, onDeselect, onCancelPlacement,
-    onMoveBlock, onRotateBlock,
-  } = roadEditor;
-  const {
-    scenario, scenarioTime, scenarioPose, selectedActorId, selectedWaypointId,
-    playing, renderPass, drawingPath,
-    onRenderComplete, onRgbFinished, onDepthFinished,
-    onScenarioTimeChange, onAddWaypoint, onMoveWaypoint, onSelectWaypoint,
-    onSelectActor,
-  } = scenarioEditor;
   const rendering = renderPass !== 'idle';
+  const selectedId = selectedObject?.kind === 'tile' ? selectedObject.id : null;
+
   const { gl, camera } = useThree();
+  const [cursorPos, setCursorPos] = useState<[number, number, number] | null>(null);
+
+  useEffect(() => {
+    if (!drawingPath) setCursorPos(null);
+  }, [drawingPath]);
 
   const { ghost, isDraggingGizmoRef } = useSceneMouseControls({
     gl,
@@ -74,11 +59,11 @@ export default function Scene({ roadEditor, scenarioEditor }: Props) {
     selectedId,
     selectedRoadType,
     drawingPath,
-    onPlace,
-    onRotate,
-    onSelectBlock,
-    onDeselect,
-    onCancelPlacement,
+    onPlace: placeBlock,
+    onRotate: rotateGhost,
+    onSelectBlock: selectBlock,
+    onDeselect: deselectBlock,
+    onCancelPlacement: () => selectRoadType(null),
   });
 
   useScenarioMouseControls({
@@ -87,39 +72,37 @@ export default function Scene({ roadEditor, scenarioEditor }: Props) {
     enabled: drawingPath && !selectedRoadType,
     scenarioTime,
     selectedActorId,
-    onAddWaypoint,
-    onScenarioTimeChange,
+    onAddWaypoint: addWaypoint,
+    onScenarioTimeChange: setScenarioTime,
+    onCursorMove: setCursorPos,
   });
 
   useEffect(() => {
     camera.lookAt(0, 0, 0);
   }, [camera]);
 
-  // ── Time advancement ────────────────────────────────────────────────────────
-  // Use refs so the useFrame callback always reads the latest prop values
-  // without needing to be recreated each render.
-  const playingRef     = useRef(playing);
-  const renderingRef   = useRef(rendering);
+  // ── Time advancement ──────────────────────────────────────────────────────
+  const playingRef = useRef(playing);
+  const renderingRef = useRef(rendering);
   const scenarioTimeRef = useRef(scenarioTime);
-  const durationRef    = useRef(scenario.duration);
+  const durationRef = useRef(scenario.duration);
 
-  playingRef.current      = playing;
-  renderingRef.current    = rendering;
+  playingRef.current = playing;
+  renderingRef.current = rendering;
   scenarioTimeRef.current = scenarioTime;
-  durationRef.current     = scenario.duration;
+  durationRef.current = scenario.duration;
 
   useFrame((_, delta) => {
     if (!playingRef.current && !renderingRef.current) return;
     const next = scenarioTimeRef.current + delta;
     if (renderingRef.current) {
       if (next >= durationRef.current) {
-        onRenderComplete();
+        setRenderPass('idle');
       } else {
-        onScenarioTimeChange(next);
+        setScenarioTime(next);
       }
     } else {
-      // playing: loop back to 0 at the end
-      onScenarioTimeChange(next % durationRef.current);
+      setScenarioTime(next % durationRef.current);
     }
   });
 
@@ -132,20 +115,23 @@ export default function Scene({ roadEditor, scenarioEditor }: Props) {
     ? scenario.egoTrack
     : scenario.tracks.find(t => t.actorId === selectedActorId) ?? null;
 
+  const ghostActor = drawingPath && selectedActorId !== 'ego'
+    ? scenario.actors.find(a => a.id === selectedActorId) ?? null
+    : null;
+
+  const scenarioPose = evaluateTrack(scenario.egoTrack, scenarioTime);
+
   return (
     <>
       <ambientLight intensity={0.6} />
       <directionalLight position={[10, 20, 10]} intensity={1} />
 
-      <Car
-        scenarioPose={scenarioPose}
-        rendering={rendering}
-      />
+      <Car scenarioPose={scenarioPose} rendering={rendering} />
 
-      {!rendering && 
+      {!rendering && (
         <>
           <gridHelper args={[30, 30, '#444', '#2a2a2a']} />
-          {/* Road tiles */}
+
           {ghost && selectedRoadType && (
             <RoadTile
               position={[ghost[0], 0, ghost[2]]}
@@ -159,13 +145,12 @@ export default function Scene({ roadEditor, scenarioEditor }: Props) {
             <SelectionGizmo
               position={selectedBlock.position}
               mode={gizmoMode}
-              onMove={(newPos) => onMoveBlock(selectedId!, newPos)}
-              onRotate={(delta) => onRotateBlock(selectedId!, delta)}
+              onMove={(newPos) => moveBlock(selectedId!, newPos)}
+              onRotate={(delta) => rotateBlock(selectedId!, delta)}
               isDraggingRef={isDraggingGizmoRef}
             />
           )}
 
-          {/* Selected actor's track + waypoints */}
           {!selectedRoadType && selectedTrack && (() => {
             const color = actorColorMap[selectedTrack.actorId] ?? '#ffffff';
             return (
@@ -177,15 +162,39 @@ export default function Scene({ roadEditor, scenarioEditor }: Props) {
                     waypoint={wp}
                     color={color}
                     selected={selectedWaypointId === wp.id}
-                    onSelect={() => onSelectWaypoint(wp.id)}
-                    onMove={(pos) => onMoveWaypoint(selectedTrack.actorId, wp.id, pos)}
+                    onSelect={() => useEditorStore.setState({ selectedWaypointId: wp.id })}
+                    onMove={(pos) => moveWaypoint(selectedTrack.actorId, wp.id, pos)}
                   />
                 ))}
               </group>
             );
           })()}
+
+          {drawingPath && cursorPos && (() => {
+            const [cx, , cz] = cursorPos;
+            const color = actorColorMap[selectedActorId] ?? '#ffffff';
+            return (
+              <group position={[cx, 0, cz]}>
+                <mesh position={[0, GHOST_WP_POLE_HEIGHT / 2, 0]}>
+                  <cylinderGeometry args={[GHOST_WP_POLE_RADIUS, GHOST_WP_POLE_RADIUS, GHOST_WP_POLE_HEIGHT, 6]} />
+                  <meshBasicMaterial color={color} transparent opacity={0.4} />
+                </mesh>
+                <mesh position={[0, GHOST_WP_POLE_HEIGHT + GHOST_WP_SPHERE_RADIUS, 0]}>
+                  <sphereGeometry args={[GHOST_WP_SPHERE_RADIUS, 10, 8]} />
+                  <meshBasicMaterial color={color} transparent opacity={0.4} />
+                </mesh>
+                {ghostActor && (
+                  <ActorMesh
+                    actor={ghostActor}
+                    pose={{ position: [0, 0, 0], yaw: 0 }}
+                    ghost
+                  />
+                )}
+              </group>
+            );
+          })()}
         </>
-      }
+      )}
 
       {blocks.map(b => (
         <RoadTile
@@ -197,7 +206,6 @@ export default function Scene({ roadEditor, scenarioEditor }: Props) {
         />
       ))}
 
-      {/* Actor meshes */}
       {scenario.actors.map(actor => {
         const track = scenario.tracks.find(t => t.actorId === actor.id);
         if (!track) return null;
@@ -205,7 +213,7 @@ export default function Scene({ roadEditor, scenarioEditor }: Props) {
         if (!pose) return null;
         function handleActorSelect() {
           if (drawingPath) return;
-          onSelectActor(actor.id);
+          selectActor(actor.id);
         }
         return (
           <ActorMesh
