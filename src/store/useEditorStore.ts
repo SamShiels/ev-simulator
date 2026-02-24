@@ -2,8 +2,6 @@ import { create } from 'zustand';
 import type { RoadType, GizmoMode, RenderPass, Block, Selection } from '../App';
 import type { Scenario, Waypoint, WaypointTrack, Actor, ActorKind } from '../scenario/types';
 import { defaultScenario, nextActorColor } from '../scenario/defaults';
-import { findRoadPath } from '../road/pathfinder';
-import { getRoadWaypoints } from '../road/roadCurve';
 
 // ── Private helpers ──────────────────────────────────────────────────────────
 
@@ -141,58 +139,17 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
     rotateGhost: () => set(s => ({ ghostRotation: (s.ghostRotation + 1) % 4 })),
 
     placeBlock: (pos) => {
-      const { selectedRoadType, ghostRotation, blocks, scenario } = get();
+      const { selectedRoadType, ghostRotation, blocks } = get();
       if (!selectedRoadType) return;
       const occupied = blocks.some(b => b.position[0] === pos[0] && b.position[2] === pos[2]);
       if (occupied) return;
-
       const newBlock: Block = {
         id: `${pos[0]}-${pos[2]}-${Date.now()}`,
         position: pos,
         roadType: selectedRoadType,
         rotation: ghostRotation,
       };
-      const newBlocks = [...blocks, newBlock];
-
-      const oldPath = findRoadPath(blocks);
-      const oldPathLen = oldPath?.length ?? 0;
-      const newPath = findRoadPath(newBlocks);
-
-      if (!newPath || newPath.length <= oldPathLen) {
-        set({ blocks: newBlocks });
-        return;
-      }
-
-      const oldPts = oldPath ? getRoadWaypoints(oldPath) : [];
-      const newPts = getRoadWaypoints(newPath);
-      const addedPts = newPts.slice(oldPts.length);
-
-      if (addedPts.length === 0) {
-        set({ blocks: newBlocks });
-        return;
-      }
-
-      const addedWps: Waypoint[] = addedPts.map(pt => ({
-        id: uid(),
-        time: 0,
-        position: [pt.x, pt.y, pt.z] as [number, number, number],
-      }));
-
-      const wps = [...scenario.egoTrack.waypoints, ...addedWps];
-      const n = wps.length;
-      const dur = scenario.duration;
-      const redistributed = wps.map((wp, i) => ({
-        ...wp,
-        time: n === 1 ? 0 : (i / (n - 1)) * dur,
-      }));
-
-      set({
-        blocks: newBlocks,
-        scenario: {
-          ...scenario,
-          egoTrack: { ...scenario.egoTrack, waypoints: redistributed },
-        },
-      });
+      set({ blocks: [...blocks, newBlock] });
     },
 
     selectBlock: (id) => set({ selection: { kind: 'tile', id }, drawingPath: false, selectedWaypointId: null }),
@@ -228,21 +185,13 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
     },
 
     seedEgoTrack: () => {
-      const { blocks, scenario } = get();
-      const path = findRoadPath(blocks);
-      if (!path) {
-        set({ scenario: { ...scenario, egoTrack: { actorId: 'ego', waypoints: [] } } });
-        return;
-      }
-      const pts = getRoadWaypoints(path);
-      const n = pts.length;
-      const dur = scenario.duration;
-      const waypoints: Waypoint[] = pts.map((pt, i) => ({
-        id: uid(),
-        time: n === 1 ? 0 : (i / (n - 1)) * dur,
-        position: [pt.x, pt.y, pt.z],
-      }));
-      set({ scenario: { ...scenario, egoTrack: { actorId: 'ego', waypoints } } });
+      const { scenario } = get();
+      set({
+        scenario: {
+          ...scenario,
+          egoTrack: { actorId: 'ego', waypoints: [{ id: uid(), time: 0, position: [0, 0, 0] }] },
+        },
+      });
     },
 
     // ── Selection actions ──────────────────────────────────────────────────
@@ -265,7 +214,7 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
         label: `${kindLabels[kind]} ${count + 1}`,
         color: nextActorColor(count),
       };
-      const track: WaypointTrack = { actorId: id, waypoints: [] };
+      const track: WaypointTrack = { actorId: id, waypoints: [{ id: uid(), time: 0, position: [0, 0, 0] }] };
       set({
         scenario: {
           ...scenario,
@@ -343,6 +292,12 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
     },
 
     deleteWaypoint: (actorId, wpId) => {
+      const { scenario } = get();
+      const track = actorId === 'ego'
+        ? scenario.egoTrack
+        : scenario.tracks.find(t => t.actorId === actorId);
+      if (!track || track.waypoints.length <= 1) return;
+
       setTrack(actorId, track => ({
         ...track,
         waypoints: track.waypoints.filter(w => w.id !== wpId),
