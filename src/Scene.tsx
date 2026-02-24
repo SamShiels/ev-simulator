@@ -148,7 +148,7 @@ export default function Scene() {
             />
           )}
 
-          {!selectedRoadType && selectedTrack && (() => {
+          {drawingPath && selectedTrack && (() => {
             const color = actorColorMap[selectedTrack.actorId] ?? '#ffffff';
             return (
               <group key={selectedTrack.actorId}>

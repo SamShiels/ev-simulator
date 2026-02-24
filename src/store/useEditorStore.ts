@@ -275,6 +275,7 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
           tracks: [...scenario.tracks, track],
         },
         selection: { kind: 'actor', id },
+        drawingPath: false,
       });
     },
 
@@ -381,7 +382,7 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
     setGizmoMode: (mode) => set({ gizmoMode: mode }),
     toggleDrawingPath: () => {
       const { selection, drawingPath } = get();
-      if (selection?.kind !== 'actor') return;
+      if (!drawingPath && selection?.kind !== 'actor') return;
       set({ drawingPath: !drawingPath });
     },
   };
