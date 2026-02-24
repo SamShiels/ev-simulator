@@ -51,6 +51,7 @@ interface EditorState {
   gizmoMode: GizmoMode;
 
   selection: Selection;
+  drawingPath: boolean;
 
   // Scenario
   scenario: Scenario;
@@ -98,6 +99,7 @@ interface EditorActions {
 
   // UI
   setGizmoMode: (mode: GizmoMode) => void;
+  toggleDrawingPath: () => void;
 }
 
 export type EditorStore = EditorState & EditorActions;
@@ -126,6 +128,7 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
     ghostRotation: 1,
     gizmoMode: 'translate',
     selection: { kind: 'actor', id: 'ego' },
+    drawingPath: false,
 
     scenario: defaultScenario(),
     scenarioTime: 0,
@@ -195,8 +198,8 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
       });
     },
 
-    selectBlock: (id) => set({ selection: { kind: 'tile', id } }),
-    deselectBlock: () => set({ selection: { kind: 'actor', id: 'ego' } }),
+    selectBlock: (id) => set({ selection: { kind: 'tile', id }, drawingPath: false }),
+    deselectBlock: () => set({ selection: { kind: 'actor', id: 'ego' }, drawingPath: false }),
 
     moveBlock: (id, pos) => {
       const { blocks } = get();
@@ -222,6 +225,7 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
       set({
         blocks: blocks.filter(b => b.id !== selection.id),
         selection: { kind: 'actor', id: 'ego' },
+        drawingPath: false,
       });
     },
 
@@ -244,7 +248,7 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
     },
 
     // ── Selection actions ──────────────────────────────────────────────────
-    selectActor: (id) => set({ selection: { kind: 'actor', id } }),
+    selectActor: (id) => set({ selection: { kind: 'actor', id }, drawingPath: false }),
     selectWaypoint: (actorId, id) => set({ selection: { kind: 'waypoint', actorId, id } }),
 
     // ── Actor actions ──────────────────────────────────────────────────────
@@ -285,6 +289,7 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
           tracks: scenario.tracks.filter(t => t.actorId !== id),
         },
         selection: needsReset ? { kind: 'actor', id: 'ego' } : selection,
+        drawingPath: false,
       });
     },
 
@@ -374,5 +379,10 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
 
     // ── UI actions ─────────────────────────────────────────────────────────
     setGizmoMode: (mode) => set({ gizmoMode: mode }),
+    toggleDrawingPath: () => {
+      const { selection, drawingPath } = get();
+      if (selection?.kind !== 'actor') return;
+      set({ drawingPath: !drawingPath });
+    },
   };
 });

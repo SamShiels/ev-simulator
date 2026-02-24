@@ -40,6 +40,8 @@ export default function Scene() {
   const selectActor = useEditorStore(s => s.selectActor);
   const selectWaypoint = useEditorStore(s => s.selectWaypoint);
 
+  const drawingPath = useEditorStore(s => s.drawingPath);
+
   const rendering = renderPass !== 'idle';
   const selectedId = selectionTileId(selection);
   const selectedActorId = selectionActorId(selection);
@@ -64,7 +66,7 @@ export default function Scene() {
   useScenarioMouseControls({
     gl,
     camera,
-    enabled: !selectedRoadType && selection?.kind !== 'tile',
+    enabled: drawingPath,
     scenarioTime,
     selectedActorId,
     onAddWaypoint: addWaypoint,
@@ -110,7 +112,7 @@ export default function Scene() {
     ? scenario.egoTrack
     : scenario.tracks.find(t => t.actorId === selectedActorId) ?? null;
 
-  const ghostActor = selectedActorId !== 'ego'
+  const ghostActor = drawingPath && selectedActorId !== 'ego'
     ? scenario.actors.find(a => a.id === selectedActorId) ?? null
     : null;
 
@@ -165,7 +167,7 @@ export default function Scene() {
             );
           })()}
 
-          {!selectedRoadType && cursorPos && (() => {
+          {drawingPath && cursorPos && (() => {
             const [cx, , cz] = cursorPos;
             const color = actorColorMap[selectedActorId] ?? '#ffffff';
             return (
