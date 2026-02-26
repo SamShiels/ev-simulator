@@ -1,6 +1,6 @@
-import { useRef, useEffect, type MutableRefObject } from 'react';
+import { useRef, useEffect, type RefObject } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { advance_actor } from '../scenario/interpolate';
+import { advance_actor, sample_pose_at_progress } from '../scenario/interpolate';
 import type { DrivingZone } from '../scenario/interpolate';
 import type { WaypointTrack, ScenarioPose } from '../scenario/types';
 import { useEditorStore } from '../store/useEditorStore';
@@ -11,51 +11,61 @@ export function useActorAdvance(
   brake: number,
   topSpeed: number,
   label: string,
-): MutableRefObject<ScenarioPose | null> {
+  isEgo = false,
+): RefObject<ScenarioPose | null> {
   const poseRef     = useRef<ScenarioPose | null>(null);
   const speedRef    = useRef(0);
   const progressRef = useRef(0);
   const zoneRef     = useRef<DrivingZone | null>(null);
-  const prevTimeRef = useRef(0);
 
   useEffect(() => {
     poseRef.current     = null;
     speedRef.current    = 0;
     progressRef.current = 0;
     zoneRef.current     = null;
-    prevTimeRef.current = 0;
   }, [track]);
 
-  useFrame(() => {
-    const scenarioTime = useEditorStore.getState().scenarioTime;
-    const delta = scenarioTime - prevTimeRef.current;
-    prevTimeRef.current = scenarioTime;
+  useFrame((_, delta) => {
+    const store = useEditorStore.getState();
+    const { playing, renderPass } = store;
+    const rendering = renderPass !== 'idle';
+    const active = playing || rendering;
+    const scenarioProgress = store.scenarioTime; // distance in metres
 
-    if (delta === 0) return;
+    if (active) {
+      // Detect loop/reset: scenarioProgress jumped back to near 0
+      if (scenarioProgress < progressRef.current - 0.5) {
+        speedRef.current    = 0;
+        progressRef.current = 0;
+        zoneRef.current     = null;
+      }
 
-    let speed = speedRef.current;
-    let progress = progressRef.current;
+      const result = advance_actor(track, speedRef.current, progressRef.current, delta, accel, brake, topSpeed);
+      if (!result) return;
 
-    if (delta < 0) {
-      // Scrubbed backward — reset and replay from t=0
-      speed = 0;
-      progress = 0;
+      if (result.zone !== zoneRef.current) {
+        console.log(`[${label}] ${result.zone} — speed: ${result.speed.toFixed(2)} m/s`);
+        zoneRef.current = result.zone;
+      }
+
+      poseRef.current     = result.pose;
+      speedRef.current    = result.speed;
+      progressRef.current = result.progress;
+
+      if (isEgo) {
+        store.setScenarioTime(result.progress);
+        if (rendering && result.progress >= track.length) {
+          store.setRenderPass('idle');
+        }
+      }
+    } else {
+      // Scrubbing: sample the curve geometrically at the target distance
+      const pose = sample_pose_at_progress(track, scenarioProgress);
+      poseRef.current     = pose;
+      progressRef.current = scenarioProgress;
+      speedRef.current    = 0;
+      zoneRef.current     = null;
     }
-
-    const effectiveDelta = delta < 0 ? scenarioTime : delta;
-    if (effectiveDelta <= 0) return;
-
-    const result = advance_actor(track, speed, progress, effectiveDelta, accel, brake, topSpeed);
-    if (!result) return;
-
-    if (result.zone !== zoneRef.current) {
-      console.log(`[${label}] ${result.zone} — speed: ${result.speed.toFixed(2)} m/s`);
-      zoneRef.current = result.zone;
-    }
-
-    poseRef.current     = result.pose;
-    speedRef.current    = result.speed;
-    progressRef.current = result.progress;
   });
 
   return poseRef;

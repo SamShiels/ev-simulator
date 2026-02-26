@@ -1,58 +1,68 @@
 import { useRef } from 'react';
 import { useEditorStore, selectionActorId } from '../store/useEditorStore';
+import { get_waypoint_distances } from '../scenario/interpolate';
+import type { WaypointTrack, Waypoint } from '../scenario/types';
 
 function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v));
+}
+
+function computeWaypointPct(dist: number, trackLength: number): number {
+  return clamp(dist / trackLength, 0, 1) * 100;
+}
+
+interface WaypointDotProps {
+  wp: Waypoint;
+  pct: number;
+  color: string;
+  isSelected: boolean;
+  onSelect: (id: string) => void;
+}
+
+function WaypointDot({ wp, pct, color, isSelected, onSelect }: WaypointDotProps) {
+  function handlePointerDown(e: React.PointerEvent) {
+    e.stopPropagation();
+    onSelect(wp.id);
+  }
+
+  return (
+    <div
+      onPointerDown={handlePointerDown}
+      className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rotate-45 cursor-pointer"
+      style={{
+        left: `${pct}%`,
+        backgroundColor: isSelected ? '#ffffff' : color,
+        border: isSelected ? '2px solid #ffffff' : `2px solid ${color}`,
+      }}
+    />
+  );
 }
 
 interface LaneProps {
   actorId: string;
   label: string;
   color: string;
-  waypoints: Array<{ id: string; time: number }>;
-  duration: number;
+  track: WaypointTrack;
+  trackLength: number;
   selectedActorId: string;
   selectedWaypointId: string | null;
   onSelectActor: () => void;
   onSelectWaypoint: (waypointId: string) => void;
-  onWaypointTimeChange: (waypointId: string, time: number) => void;
 }
 
 function Lane({
   actorId,
   label,
   color,
-  waypoints,
-  duration,
+  track,
+  trackLength,
   selectedActorId,
   selectedWaypointId,
   onSelectActor,
   onSelectWaypoint,
-  onWaypointTimeChange,
 }: LaneProps) {
-  const laneRef = useRef<HTMLDivElement>(null);
   const isSelected = selectedActorId === actorId;
-
-  function startDragWaypoint(waypointId: string, e: React.PointerEvent) {
-    e.stopPropagation();
-    onSelectWaypoint(waypointId);
-
-    function handleMove(ev: PointerEvent) {
-      const lane = laneRef.current;
-      if (!lane) return;
-      const rect = lane.getBoundingClientRect();
-      const frac = clamp((ev.clientX - rect.left) / rect.width, 0, 1);
-      onWaypointTimeChange(waypointId, frac * duration);
-    }
-
-    function handleUp() {
-      window.removeEventListener('pointermove', handleMove);
-      window.removeEventListener('pointerup', handleUp);
-    }
-
-    window.addEventListener('pointermove', handleMove);
-    window.addEventListener('pointerup', handleUp);
-  }
+  const wpDistances = trackLength > 0 ? get_waypoint_distances(track) : [];
 
   return (
     <div
@@ -63,23 +73,17 @@ function Lane({
         {label}
       </div>
 
-      <div ref={laneRef} className="flex-1 relative h-full">
-        {waypoints.map(wp => {
-          const pct = clamp(wp.time / duration, 0, 1) * 100;
-          const isWpSelected = selectedWaypointId === wp.id;
-          return (
-            <div
-              key={wp.id}
-              onPointerDown={(e) => startDragWaypoint(wp.id, e)}
-              className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rotate-45 cursor-ew-resize"
-              style={{
-                left: `${pct}%`,
-                backgroundColor: isWpSelected ? '#ffffff' : color,
-                border: isWpSelected ? '2px solid #ffffff' : `2px solid ${color}`,
-              }}
-            />
-          );
-        })}
+      <div className="flex-1 relative h-full">
+        {track.waypoints.map((wp, i) => (
+          <WaypointDot
+            key={wp.id}
+            wp={wp}
+            pct={computeWaypointPct(wpDistances[i] ?? 0, trackLength)}
+            color={color}
+            isSelected={selectedWaypointId === wp.id}
+            onSelect={onSelectWaypoint}
+          />
+        ))}
       </div>
     </div>
   );
@@ -90,14 +94,17 @@ export default function Timeline() {
   const scenarioTime = useEditorStore(s => s.scenarioTime);
   const selection = useEditorStore(s => s.selection);
   const setScenarioTime = useEditorStore(s => s.setScenarioTime);
-  const setDuration = useEditorStore(s => s.setDuration);
   const selectActor = useEditorStore(s => s.selectActor);
   const selectWaypoint = useEditorStore(s => s.selectWaypoint);
-  const setWaypointTime = useEditorStore(s => s.setWaypointTime);
   const scrubRef = useRef<HTMLDivElement>(null);
 
   const selectedActorId = selectionActorId(selection);
   const selectedWaypointId = useEditorStore(s => s.selectedWaypointId);
+  const trackLength = scenario.egoTrack.length;
+
+  function scrubToFrac(frac: number) {
+    setScenarioTime(frac * trackLength);
+  }
 
   function startScrub(e: React.PointerEvent) {
     scrub(e.nativeEvent);
@@ -106,8 +113,7 @@ export default function Timeline() {
       const bar = scrubRef.current;
       if (!bar) return;
       const rect = bar.getBoundingClientRect();
-      const frac = clamp((ev.clientX - rect.left) / rect.width, 0, 1);
-      setScenarioTime(frac * scenario.duration);
+      scrubToFrac(clamp((ev.clientX - rect.left) / rect.width, 0, 1));
     }
 
     function handleMove(ev: PointerEvent) { scrub(ev); }
@@ -120,8 +126,7 @@ export default function Timeline() {
     window.addEventListener('pointerup', handleUp);
   }
 
-  const egoWaypoints = scenario.egoTrack.waypoints.map(w => ({ id: w.id, time: w.time }));
-  const playheadPct = clamp(scenarioTime / scenario.duration, 0, 1) * 100;
+  const playheadPct = trackLength > 0 ? clamp(scenarioTime / trackLength, 0, 1) * 100 : 0;
 
   return (
     <div
@@ -131,7 +136,7 @@ export default function Timeline() {
       {/* Scrub bar */}
       <div
         ref={scrubRef}
-        className="relative h-2 bg-white/10 cursor-crosshair mx-28"
+        className="relative h-2 bg-white/10 cursor-crosshair ml-28"
         onPointerDown={startScrub}
       >
         <div
@@ -149,50 +154,38 @@ export default function Timeline() {
         actorId="ego"
         label="Car (ego)"
         color="#22d3ee"
-        waypoints={egoWaypoints}
-        duration={scenario.duration}
+        track={scenario.egoTrack}
+        trackLength={trackLength}
         selectedActorId={selectedActorId}
         selectedWaypointId={selectedWaypointId}
         onSelectActor={() => selectActor('ego')}
         onSelectWaypoint={(wpId) => selectWaypoint('ego', wpId)}
-        onWaypointTimeChange={(wpId, t) => setWaypointTime('ego', wpId, t)}
       />
 
       {scenario.actors.map(actor => {
         const track = scenario.tracks.find(t => t.actorId === actor.id);
-        const wps = track ? track.waypoints.map(w => ({ id: w.id, time: w.time })) : [];
+        if (!track) return null;
         return (
           <Lane
             key={actor.id}
             actorId={actor.id}
             label={actor.label}
             color={actor.color}
-            waypoints={wps}
-            duration={scenario.duration}
+            track={track}
+            trackLength={track.length}
             selectedActorId={selectedActorId}
             selectedWaypointId={selectedWaypointId}
             onSelectActor={() => selectActor(actor.id)}
             onSelectWaypoint={(wpId) => selectWaypoint(actor.id, wpId)}
-            onWaypointTimeChange={(wpId, t) => setWaypointTime(actor.id, wpId, t)}
           />
         );
       })}
 
       {/* Footer */}
-      <div className="flex items-center gap-4 px-3 py-1.5 text-xs text-white/50">
-        <span className="font-mono">{scenarioTime.toFixed(2)}s</span>
+      <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-white/50 font-mono">
+        <span>{scenarioTime.toFixed(1)} m</span>
         <span>/</span>
-        <div className="flex items-center gap-1">
-          <input
-            type="number"
-            min={1}
-            max={300}
-            value={scenario.duration}
-            onChange={e => setDuration(Number(e.target.value))}
-            className="w-14 bg-white/10 rounded px-1.5 py-0.5 text-white text-xs font-mono"
-          />
-          <span>s</span>
-        </div>
+        <span>{trackLength.toFixed(1)} m</span>
       </div>
     </div>
   );

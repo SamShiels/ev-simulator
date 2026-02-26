@@ -102,6 +102,38 @@ export function advance_actor(track: WaypointTrack, current_speed: number, curre
   };
 }
 
+export function sample_pose_at_progress(track: WaypointTrack, progress: number): ScenarioPose | null {
+  const wps = track.waypoints;
+  if (wps.length === 0) return null;
+  if (wps.length === 1) {
+    const [x, y, z] = wps[0].position;
+    return { position: [x, y, z], yaw: 0 };
+  }
+  _curve.points = wps.map(w => new THREE.Vector3(w.position[0], w.position[1], w.position[2]));
+  _curve.updateArcLengths();
+  const { total_length } = calculate_waypoint_distances(_curve, wps);
+  if (total_length === 0) {
+    const [x, y, z] = wps[0].position;
+    return { position: [x, y, z], yaw: 0 };
+  }
+  const t = Math.min(1, Math.max(0, progress / total_length));
+  _curve.getPointAt(t, _pos);
+  _curve.getTangentAt(t, _tangent);
+  return {
+    position: [_pos.x, _pos.y, _pos.z],
+    yaw: Math.atan2(_tangent.x, _tangent.z),
+  };
+}
+
+export function get_waypoint_distances(track: WaypointTrack): number[] {
+  const wps = track.waypoints;
+  if (wps.length === 0) return [];
+  if (wps.length === 1) return [0];
+  _curve.points = wps.map(w => new THREE.Vector3(w.position[0], w.position[1], w.position[2]));
+  _curve.updateArcLengths();
+  return calculate_waypoint_distances(_curve, wps).wp_distances;
+}
+
 export function createSpeedProfile(track: WaypointTrack, accel: number, brake: number, top_speed: number): WaypointTrack {
   const _curve = new THREE.CatmullRomCurve3([], false, 'centripetal');
   const wps = track.waypoints;

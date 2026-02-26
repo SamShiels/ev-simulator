@@ -41,7 +41,7 @@ export default function Scene() {
   const addWaypoint = useEditorStore(s => s.addWaypoint);
   const moveWaypoint = useEditorStore(s => s.moveWaypoint);
   const setScenarioTime = useEditorStore(s => s.setScenarioTime);
-  const setRenderPass = useEditorStore(s => s.setRenderPass);
+
   const selectActor = useEditorStore(s => s.selectActor);
   const selectWaypoint = useEditorStore(s => s.selectWaypoint);
   const setWaypointPopupPos = useEditorStore(s => s.setWaypointPopupPos);
@@ -97,28 +97,22 @@ export default function Scene() {
     camera.lookAt(0, 0, 0);
   }, [camera]);
 
-  // ── Time advancement ──────────────────────────────────────────────────────
+  // ── Playback loop ─────────────────────────────────────────────────────────
+  // scenarioTime is now distance (metres). The ego's useActorAdvance drives it
+  // forward during playback; Scene just handles looping.
   const playingRef = useRef(playing);
-  const renderingRef = useRef(rendering);
   const scenarioTimeRef = useRef(scenarioTime);
-  const durationRef = useRef(scenario.duration);
+  const egoTrackLengthRef = useRef(scenario.egoTrack.length);
 
   playingRef.current = playing;
-  renderingRef.current = rendering;
   scenarioTimeRef.current = scenarioTime;
-  durationRef.current = scenario.duration;
+  egoTrackLengthRef.current = scenario.egoTrack.length;
 
-  useFrame((_, delta) => {
-    if (!playingRef.current && !renderingRef.current) return;
-    const next = scenarioTimeRef.current + delta;
-    if (renderingRef.current) {
-      if (next >= durationRef.current) {
-        setRenderPass('idle');
-      } else {
-        setScenarioTime(next);
-      }
-    } else {
-      setScenarioTime(next % durationRef.current);
+  useFrame(() => {
+    if (!playingRef.current) return;
+    const length = egoTrackLengthRef.current;
+    if (length > 0 && scenarioTimeRef.current >= length) {
+      setScenarioTime(0);
     }
   });
 
