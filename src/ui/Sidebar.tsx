@@ -10,6 +10,7 @@ import { useEditorStore } from '../store/useEditorStore';
 const ROAD_TYPES: { type: RoadType; label: string }[] = [
   { type: 'straight', label: 'Straight' },
   { type: 'corner', label: 'Corner' },
+  { type: 'pavement', label: 'Pavement' },
 ];
 
 const ACTOR_KINDS: { kind: ActorKind; label: string; cameraPos: [number, number, number] }[] = [

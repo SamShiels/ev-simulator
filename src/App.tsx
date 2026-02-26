@@ -9,7 +9,7 @@ import WaypointPopup from './ui/WaypointPopup';
 import { useEditorKeyBindings } from './hooks/useEditorKeyBindings';
 import { useEditorStore } from './store/useEditorStore';
 
-export type RoadType = 'straight' | 'corner';
+export type RoadType = 'straight' | 'corner' | 'pavement';
 export type GizmoMode = 'translate' | 'rotate';
 export type RenderPass = 'idle' | 'rgb' | 'depth';
 

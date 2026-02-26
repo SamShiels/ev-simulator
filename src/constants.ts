@@ -1,4 +1,4 @@
-export const TILE_SIZE = 5;
+export const TILE_SIZE = 2.5;
 
 export const EGO_ACCEL = 1;       // m/s²
 export const EGO_BRAKE = 2;       // m/s²
