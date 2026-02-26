@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { RoadType, GizmoMode, RenderPass, Block, Selection } from '../App';
+import type { RoadType, SceneryType, GizmoMode, RenderPass, Block, SceneryItem, Selection } from '../App';
 import type { Scenario, Waypoint, WaypointTrack, Actor, ActorKind, ActorStats } from '../scenario/types';
 import { defaultScenario, nextActorColor } from '../scenario/defaults';
 import {
@@ -44,6 +44,10 @@ export function selectionTileId(selection: Selection): string | null {
   return selection?.kind === 'tile' ? selection.id : null;
 }
 
+export function selectionSceneryId(selection: Selection): string | null {
+  return selection?.kind === 'scenery' ? selection.id : null;
+}
+
 // ── Store types ──────────────────────────────────────────────────────────────
 
 interface EditorState {
@@ -52,6 +56,11 @@ interface EditorState {
   selectedRoadType: RoadType | null;
   ghostRotation: number;
   gizmoMode: GizmoMode;
+
+  // Scenery
+  sceneryItems: SceneryItem[];
+  selectedSceneryType: SceneryType | null;
+  sceneryGhostRotation: number;
 
   selection: Selection;
   drawingPath: boolean;
@@ -73,6 +82,15 @@ interface EditorActions {
   selectRoadType: (type: RoadType | null) => void;
   rotateGhost: () => void;
   placeBlock: (pos: [number, number, number]) => void;
+
+  // Scenery
+  selectSceneryType: (type: SceneryType | null) => void;
+  placeSceneryItem: (pos: [number, number, number]) => void;
+  rotateSceneryGhost: () => void;
+  selectSceneryItem: (id: string) => void;
+  moveSceneryItem: (id: string, pos: [number, number, number]) => void;
+  rotateSceneryItem: (id: string, delta: 1 | -1) => void;
+  deleteSelectedScenery: () => void;
   selectBlock: (id: string) => void;
   deselectBlock: () => void;
   moveBlock: (id: string, pos: [number, number, number]) => void;
@@ -140,6 +158,10 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
     selectedRoadType: null,
     ghostRotation: 1,
     gizmoMode: 'translate',
+
+    sceneryItems: [],
+    selectedSceneryType: null,
+    sceneryGhostRotation: 0,
     selection: { kind: 'actor', id: 'ego' },
     drawingPath: false,
     selectedWaypointId: null,
@@ -154,7 +176,7 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
 
     // ── Road editor actions ────────────────────────────────────────────────
     selectRoadType: (type) => {
-      set({ selectedRoadType: type });
+      set({ selectedRoadType: type, selectedSceneryType: null });
     },
 
     rotateGhost: () => set(s => ({ ghostRotation: (s.ghostRotation + 1) % 4 })),
@@ -199,6 +221,54 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
       if (block && block.position[0] === 0 && block.position[2] === 0) return;
       set({
         blocks: blocks.filter(b => b.id !== selection.id),
+        selection: { kind: 'actor', id: 'ego' },
+        drawingPath: false,
+        selectedWaypointId: null,
+        selectedWaypointActorId: null,
+        waypointPopupPos: null,
+      });
+    },
+
+    // ── Scenery actions ────────────────────────────────────────────────────
+    selectSceneryType: (type) => {
+      set({ selectedSceneryType: type, selectedRoadType: null });
+    },
+
+    placeSceneryItem: (pos) => {
+      const { selectedSceneryType, sceneryGhostRotation, sceneryItems } = get();
+      if (!selectedSceneryType) return;
+      const newItem: SceneryItem = {
+        id: uid(),
+        position: pos,
+        sceneryType: selectedSceneryType,
+        rotation: sceneryGhostRotation,
+      };
+      set({ sceneryItems: [...sceneryItems, newItem] });
+    },
+
+    rotateSceneryGhost: () => set(s => ({ sceneryGhostRotation: (s.sceneryGhostRotation + 1) % 4 })),
+
+    selectSceneryItem: (id) => set({ selection: { kind: 'scenery', id }, drawingPath: false, selectedWaypointId: null, selectedWaypointActorId: null, waypointPopupPos: null }),
+
+    moveSceneryItem: (id, pos) => {
+      const { sceneryItems } = get();
+      set({ sceneryItems: sceneryItems.map(s => s.id === id ? { ...s, position: pos } : s) });
+    },
+
+    rotateSceneryItem: (id, delta) => {
+      const { sceneryItems } = get();
+      set({
+        sceneryItems: sceneryItems.map(s =>
+          s.id === id ? { ...s, rotation: ((s.rotation + delta) % 4 + 4) % 4 } : s,
+        ),
+      });
+    },
+
+    deleteSelectedScenery: () => {
+      const { selection, sceneryItems } = get();
+      if (selection?.kind !== 'scenery') return;
+      set({
+        sceneryItems: sceneryItems.filter(s => s.id !== selection.id),
         selection: { kind: 'actor', id: 'ego' },
         drawingPath: false,
         selectedWaypointId: null,

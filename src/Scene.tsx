@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import EgoActor from './EgoActor';
 import RoadTile from './visuals/RoadTile';
+import SceneryMesh from './visuals/SceneryMesh';
 import SelectionGizmo from './visuals/SelectionGizmo';
 import WaypointMarker from './visuals/WaypointMarker';
 import TrackLine from './visuals/TrackLine';
@@ -9,7 +10,7 @@ import ActorMesh from './visuals/ActorMesh';
 import ScenarioActor from './ScenarioActor';
 import { useSceneMouseControls } from './hooks/useSceneMouseControls';
 import { useScenarioMouseControls } from './hooks/useScenarioMouseControls';
-import { useEditorStore, selectionActorId, selectionTileId } from './store/useEditorStore';
+import { useEditorStore, selectionActorId, selectionTileId, selectionSceneryId } from './store/useEditorStore';
 
 const GHOST_WP_POLE_HEIGHT = 0.6;
 const GHOST_WP_SPHERE_RADIUS = 0.18;
@@ -26,6 +27,10 @@ export default function Scene() {
   const playing = useEditorStore(s => s.playing);
   const renderPass = useEditorStore(s => s.renderPass);
 
+  const sceneryItems = useEditorStore(s => s.sceneryItems);
+  const selectedSceneryType = useEditorStore(s => s.selectedSceneryType);
+  const sceneryGhostRotation = useEditorStore(s => s.sceneryGhostRotation);
+
   const placeBlock = useEditorStore(s => s.placeBlock);
   const rotateGhost = useEditorStore(s => s.rotateGhost);
   const selectBlock = useEditorStore(s => s.selectBlock);
@@ -40,11 +45,18 @@ export default function Scene() {
   const selectActor = useEditorStore(s => s.selectActor);
   const selectWaypoint = useEditorStore(s => s.selectWaypoint);
   const setWaypointPopupPos = useEditorStore(s => s.setWaypointPopupPos);
+  const placeSceneryItem = useEditorStore(s => s.placeSceneryItem);
+  const rotateSceneryGhost = useEditorStore(s => s.rotateSceneryGhost);
+  const selectSceneryItem = useEditorStore(s => s.selectSceneryItem);
+  const selectSceneryType = useEditorStore(s => s.selectSceneryType);
+  const moveSceneryItem = useEditorStore(s => s.moveSceneryItem);
+  const rotateSceneryItem = useEditorStore(s => s.rotateSceneryItem);
 
   const drawingPath = useEditorStore(s => s.drawingPath);
 
   const rendering = renderPass !== 'idle';
   const selectedId = selectionTileId(selection);
+  const selectedSceneryId = selectionSceneryId(selection);
   const selectedActorId = selectionActorId(selection);
   const selectedWaypointId = useEditorStore(s => s.selectedWaypointId);
 
@@ -55,13 +67,19 @@ export default function Scene() {
     gl,
     camera,
     blocks,
+    sceneryItems,
     selectedId,
     selectedRoadType,
+    selectedSceneryType,
     onPlace: placeBlock,
     onRotate: rotateGhost,
     onSelectBlock: selectBlock,
     onDeselect: deselectBlock,
     onCancelPlacement: () => selectRoadType(null),
+    onPlaceScenery: placeSceneryItem,
+    onRotateScenery: rotateSceneryGhost,
+    onSelectSceneryItem: selectSceneryItem,
+    onCancelScenery: () => selectSceneryType(null),
   });
 
   useScenarioMouseControls({
@@ -105,6 +123,7 @@ export default function Scene() {
   });
 
   const selectedBlock = selectedId ? blocks.find(b => b.id === selectedId) ?? null : null;
+  const selectedSceneryItem = selectedSceneryId ? sceneryItems.find(s => s.id === selectedSceneryId) ?? null : null;
 
   const actorColorMap: Record<string, string> = { ego: '#22d3ee' };
   scenario.actors.forEach(a => { actorColorMap[a.id] = a.color; });
@@ -137,12 +156,31 @@ export default function Scene() {
             />
           )}
 
+          {ghost && selectedSceneryType && (
+            <SceneryMesh
+              position={[ghost[0], 0, ghost[2]]}
+              sceneryType={selectedSceneryType}
+              rotation={sceneryGhostRotation}
+              ghost
+            />
+          )}
+
           {selectedBlock && (
             <SelectionGizmo
               position={selectedBlock.position}
               mode={gizmoMode}
               onMove={(newPos) => moveBlock(selectedId!, newPos)}
               onRotate={(delta) => rotateBlock(selectedId!, delta)}
+              isDraggingRef={isDraggingGizmoRef}
+            />
+          )}
+
+          {selectedSceneryItem && (
+            <SelectionGizmo
+              position={selectedSceneryItem.position}
+              mode={gizmoMode}
+              onMove={(newPos) => moveSceneryItem(selectedSceneryId!, newPos)}
+              onRotate={(delta) => rotateSceneryItem(selectedSceneryId!, delta)}
               isDraggingRef={isDraggingGizmoRef}
             />
           )}
@@ -202,6 +240,16 @@ export default function Scene() {
           roadType={b.roadType}
           rotation={b.rotation}
           selected={b.id === selectedId}
+        />
+      ))}
+
+      {sceneryItems.map(s => (
+        <SceneryMesh
+          key={s.id}
+          position={[s.position[0], 0, s.position[2]]}
+          sceneryType={s.sceneryType}
+          rotation={s.rotation}
+          selected={s.id === selectedSceneryId}
         />
       ))}
 

@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import * as THREE from 'three';
-import type { Block, RoadType } from '../App';
+import type { Block, RoadType, SceneryItem, SceneryType } from '../App';
 import { TILE_SIZE } from '../constants';
 import { useViewportControls } from './useViewportControls';
 
@@ -12,13 +12,19 @@ interface Options {
   gl: THREE.WebGLRenderer;
   camera: THREE.OrthographicCamera | THREE.PerspectiveCamera;
   blocks: Block[];
+  sceneryItems: SceneryItem[];
   selectedId: string | null;
   selectedRoadType: RoadType | null;
+  selectedSceneryType: SceneryType | null;
   onPlace: (pos: [number, number, number]) => void;
   onRotate: () => void;
   onSelectBlock: (id: string) => void;
   onDeselect: () => void;
   onCancelPlacement: () => void;
+  onPlaceScenery: (pos: [number, number, number]) => void;
+  onRotateScenery: () => void;
+  onSelectSceneryItem: (id: string) => void;
+  onCancelScenery: () => void;
 }
 
 export interface SceneMouseControls {
@@ -27,21 +33,23 @@ export interface SceneMouseControls {
 }
 
 export function useSceneMouseControls({
-  gl, camera, blocks, selectedId, selectedRoadType,
+  gl, camera, blocks, sceneryItems, selectedId, selectedRoadType, selectedSceneryType,
   onPlace, onRotate, onSelectBlock, onDeselect, onCancelPlacement,
+  onPlaceScenery, onRotateScenery, onSelectSceneryItem, onCancelScenery,
 }: Options): SceneMouseControls {
   const [ghost, setGhost] = useState<[number, number, number] | null>(null);
   const isDraggingGizmoRef = useRef(false);
 
   // Keep refs for latest state values...
-  const state = useRef({ blocks, selectedId, selectedRoadType });
-  state.current = { blocks, selectedId, selectedRoadType };
+  const state = useRef({ blocks, sceneryItems, selectedId, selectedRoadType, selectedSceneryType });
+  state.current = { blocks, sceneryItems, selectedId, selectedRoadType, selectedSceneryType };
 
   useViewportControls({
     gl,
     camera,
     onGroundMove: (pos) => {
-      if (!isDraggingGizmoRef.current && !state.current.selectedId && state.current.selectedRoadType !== null && pos) {
+      const { selectedRoadType, selectedSceneryType, selectedId } = state.current;
+      if (!isDraggingGizmoRef.current && !selectedId && (selectedRoadType !== null || selectedSceneryType !== null) && pos) {
         setGhost(snap(pos));
       } else {
         setGhost(null);
@@ -49,18 +57,33 @@ export function useSceneMouseControls({
     },
     onGroundClick: (pos) => {
       if (isDraggingGizmoRef.current) return;
-      if (!state.current.selectedRoadType && !state.current.selectedId) return;
+      const { selectedRoadType, selectedSceneryType, selectedId, blocks, sceneryItems } = state.current;
       const snappedPos = snap(pos);
-      
-      const existing = state.current.blocks.find(
+
+      if (selectedSceneryType !== null) {
+        onPlaceScenery(snappedPos);
+        return;
+      }
+
+      const existingBlock = blocks.find(
         b => b.position[0] === snappedPos[0] && b.position[2] === snappedPos[2]
       );
+      if (existingBlock) {
+        onSelectBlock(existingBlock.id);
+        return;
+      }
 
-      if (existing) {
-        onSelectBlock(existing.id);
-      } else if (state.current.selectedId) {
+      const existingScenery = sceneryItems.filter(
+        s => s.position[0] === snappedPos[0] && s.position[2] === snappedPos[2]
+      );
+      if (existingScenery.length > 0) {
+        onSelectSceneryItem(existingScenery[existingScenery.length - 1].id);
+        return;
+      }
+
+      if (selectedId) {
         onDeselect();
-      } else {
+      } else if (selectedRoadType) {
         onPlace(snappedPos);
       }
     },
@@ -70,10 +93,18 @@ export function useSceneMouseControls({
         setGhost(null);
         onCancelPlacement();
       }
+      if (state.current.selectedSceneryType !== null) {
+        setGhost(null);
+        onCancelScenery();
+      }
     },
     onKeyDown: (e) => {
-      if ((e.key === 'r' || e.key === 'R') && state.current.selectedRoadType !== null && !state.current.selectedId) {
-        onRotate();
+      if (e.key === 'r' || e.key === 'R') {
+        if (state.current.selectedRoadType !== null && !state.current.selectedId) {
+          onRotate();
+        } else if (state.current.selectedSceneryType !== null) {
+          onRotateScenery();
+        }
       }
     }
   });

@@ -1,9 +1,10 @@
 import { Canvas } from '@react-three/fiber';
 import { Suspense, useState } from 'react';
 import { cn } from '@/lib/utils';
-import type { RoadType } from '../App';
+import type { RoadType, SceneryType } from '../App';
 import type { ActorKind } from '../scenario/types';
 import { RoadTileModel } from '../visuals/RoadTile';
+import { SceneryModel } from '../visuals/SceneryMesh';
 import { PedestrianMesh, StrollerMesh, VehicleMesh } from '../visuals/ActorMesh';
 import { useEditorStore } from '../store/useEditorStore';
 
@@ -11,6 +12,12 @@ const ROAD_TYPES: { type: RoadType; label: string }[] = [
   { type: 'straight', label: 'Straight' },
   { type: 'corner', label: 'Corner' },
   { type: 'pavement', label: 'Pavement' },
+];
+
+const SCENERY_TYPES: { type: SceneryType; label: string }[] = [
+  { type: 'building-a', label: 'Building A' },
+  { type: 'building-b', label: 'Building B' },
+  { type: 'building-c', label: 'Building C' },
 ];
 
 const ACTOR_KINDS: { kind: ActorKind; label: string; cameraPos: [number, number, number] }[] = [
@@ -30,6 +37,22 @@ function TilePreview({ roadType }: { roadType: RoadType }) {
       <directionalLight position={[3, 6, 3]} intensity={1} />
       <Suspense fallback={null}>
         <RoadTileModel roadType={roadType} rotation={0} ghost={false} />
+      </Suspense>
+    </Canvas>
+  );
+}
+
+function SceneryPreview({ sceneryType }: { sceneryType: SceneryType }) {
+  return (
+    <Canvas
+      camera={{ position: [4, 6, 4], fov: 40 }}
+      style={{ width: '100%', height: '100%' }}
+      gl={{ antialias: true, alpha: true }}
+    >
+      <ambientLight intensity={2} />
+      <directionalLight position={[3, 6, 3]} intensity={1} />
+      <Suspense fallback={null}>
+        <SceneryModel sceneryType={sceneryType} rotation={0} ghost={false} />
       </Suspense>
     </Canvas>
   );
@@ -87,10 +110,12 @@ function SubLabel({ children }: { children: string }) {
 
 export default function Sidebar() {
   const selectedRoadType = useEditorStore(s => s.selectedRoadType);
+  const selectedSceneryType = useEditorStore(s => s.selectedSceneryType);
   const blocks = useEditorStore(s => s.blocks);
   const scenario = useEditorStore(s => s.scenario);
   const selection = useEditorStore(s => s.selection);
   const selectRoadType = useEditorStore(s => s.selectRoadType);
+  const selectSceneryType = useEditorStore(s => s.selectSceneryType);
   const selectBlock = useEditorStore(s => s.selectBlock);
   const selectActor = useEditorStore(s => s.selectActor);
   const addActor = useEditorStore(s => s.addActor);
@@ -98,6 +123,10 @@ export default function Sidebar() {
 
   function handleTileClick(type: RoadType) {
     selectRoadType(selectedRoadType === type ? null : type);
+  }
+
+  function handleSceneryClick(type: SceneryType) {
+    selectSceneryType(selectedSceneryType === type ? null : type);
   }
 
   return (
@@ -207,7 +236,25 @@ export default function Sidebar() {
         </div>
 
         <SubLabel>Scenery</SubLabel>
-        <p className="text-xs text-white/20 py-1 text-center">Coming soon</p>
+        <div className="grid grid-cols-2 gap-2">
+          {SCENERY_TYPES.map(({ type, label }) => (
+            <button
+              key={type}
+              onClick={() => handleSceneryClick(type)}
+              className={cn(
+                'flex flex-col items-center gap-1.5 p-2 rounded-lg transition-all text-sm font-medium',
+                selectedSceneryType === type
+                  ? 'bg-white/20 ring-1 ring-white/40 text-white'
+                  : 'text-white/50 hover:bg-white/10 hover:text-white',
+              )}
+            >
+              <div className="w-full aspect-square rounded-md overflow-hidden">
+                <SceneryPreview sceneryType={type} />
+              </div>
+              {label}
+            </button>
+          ))}
+        </div>
 
       </Section>
     </div>

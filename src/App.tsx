@@ -10,6 +10,7 @@ import { useEditorKeyBindings } from './hooks/useEditorKeyBindings';
 import { useEditorStore } from './store/useEditorStore';
 
 export type RoadType = 'straight' | 'corner' | 'pavement';
+export type SceneryType = 'building-a' | 'building-b' | 'building-c';
 export type GizmoMode = 'translate' | 'rotate';
 export type RenderPass = 'idle' | 'rgb' | 'depth';
 
@@ -20,9 +21,17 @@ export interface Block {
   rotation: number; // 0–3, each step = 90°
 }
 
+export interface SceneryItem {
+  id: string;
+  position: [number, number, number];
+  sceneryType: SceneryType;
+  rotation: number; // 0–3, each step = 90°
+}
+
 export type Selection =
-  | { kind: 'tile'; id: string }
-  | { kind: 'actor'; id: string }
+  | { kind: 'tile';    id: string }
+  | { kind: 'actor';   id: string }
+  | { kind: 'scenery'; id: string }
   | null;
 
 export default function App() {

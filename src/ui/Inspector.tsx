@@ -1,4 +1,4 @@
-import type { RoadType } from '../App';
+import type { RoadType, SceneryType } from '../App';
 import type { ActorKind, ActorStats } from '../scenario/types';
 
 // ── Inspected object types ──────────────────────────────────────────────────
@@ -29,7 +29,15 @@ export interface InspectedEgo {
   topSpeed: number;
 }
 
-export type InspectedObject = InspectedTile | InspectedActor | InspectedEgo;
+export interface InspectedScenery {
+  kind: 'scenery';
+  id: string;
+  position: [number, number, number];
+  sceneryType: SceneryType;
+  rotation: number;
+}
+
+export type InspectedObject = InspectedTile | InspectedActor | InspectedEgo | InspectedScenery;
 
 type StatField = keyof ActorStats;
 
@@ -168,6 +176,22 @@ function EgoInspector({ obj, onStatChange }: {
   );
 }
 
+function SceneryInspector({ obj, onDelete }: { obj: InspectedScenery; onDelete: () => void }) {
+  const [x, , z] = obj.position;
+  const rotationDeg = obj.rotation * 90;
+
+  return (
+    <div>
+      <KindBadge label="Scenery" />
+      <Field label="Type" value={obj.sceneryType} />
+      <Field label="X" value={x} />
+      <Field label="Z" value={z} />
+      <Field label="Rotation" value={`${rotationDeg}°`} />
+      <DeleteButton onDelete={onDelete} />
+    </div>
+  );
+}
+
 // ── Main Inspector ──────────────────────────────────────────────────────────
 
 interface Props {
@@ -191,6 +215,10 @@ export default function Inspector({ object, onDelete, onStatChange }: Props) {
 
   if (object.kind === 'ego') {
     return <EgoInspector obj={object} onStatChange={onStatChange} />;
+  }
+
+  if (object.kind === 'scenery') {
+    return <SceneryInspector obj={object} onDelete={onDelete} />;
   }
 
   return null;
