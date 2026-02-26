@@ -15,7 +15,6 @@ export interface AdvanceResult {
   zone: DrivingZone;
 }
 
-// 1. ADD THIS HELPER FUNCTION BACK IN
 function calculate_waypoint_distances(curve: THREE.CatmullRomCurve3, wps: any[]): { wp_distances: number[], total_length: number } {
   const wp_distances = [0];
   let cumulative_distance = 0;

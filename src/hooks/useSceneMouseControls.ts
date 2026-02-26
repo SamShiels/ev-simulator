@@ -1,11 +1,15 @@
 import { useState, useRef } from 'react';
 import * as THREE from 'three';
 import type { Block, RoadType, SceneryItem, SceneryType } from '../App';
-import { TILE_SIZE } from '../constants';
+import { TILE_SIZE, SCENERY_GRID_SIZE } from '../constants';
 import { useViewportControls } from './useViewportControls';
 
 function snap(p: THREE.Vector3): [number, number, number] {
   return [Math.round(p.x / TILE_SIZE) * TILE_SIZE, 0, Math.round(p.z / TILE_SIZE) * TILE_SIZE];
+}
+
+function snapScenery(p: THREE.Vector3): [number, number, number] {
+  return [Math.round(p.x / SCENERY_GRID_SIZE) * SCENERY_GRID_SIZE, 0, Math.round(p.z / SCENERY_GRID_SIZE) * SCENERY_GRID_SIZE];
 }
 
 interface Options {
@@ -50,7 +54,7 @@ export function useSceneMouseControls({
     onGroundMove: (pos) => {
       const { selectedRoadType, selectedSceneryType, selectedId } = state.current;
       if (!isDraggingGizmoRef.current && !selectedId && (selectedRoadType !== null || selectedSceneryType !== null) && pos) {
-        setGhost(snap(pos));
+        setGhost(selectedSceneryType !== null ? snapScenery(pos) : snap(pos));
       } else {
         setGhost(null);
       }
@@ -59,9 +63,10 @@ export function useSceneMouseControls({
       if (isDraggingGizmoRef.current) return;
       const { selectedRoadType, selectedSceneryType, selectedId, blocks, sceneryItems } = state.current;
       const snappedPos = snap(pos);
+      const snappedSceneryPos = snapScenery(pos);
 
       if (selectedSceneryType !== null) {
-        onPlaceScenery(snappedPos);
+        onPlaceScenery(snappedSceneryPos);
         return;
       }
 
@@ -74,7 +79,7 @@ export function useSceneMouseControls({
       }
 
       const existingScenery = sceneryItems.filter(
-        s => s.position[0] === snappedPos[0] && s.position[2] === snappedPos[2]
+        s => s.position[0] === snappedSceneryPos[0] && s.position[2] === snappedSceneryPos[2]
       );
       if (existingScenery.length > 0) {
         onSelectSceneryItem(existingScenery[existingScenery.length - 1].id);

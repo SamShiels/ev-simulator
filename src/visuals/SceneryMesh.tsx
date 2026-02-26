@@ -18,6 +18,7 @@ const MTL_PATH: Record<SceneryType, string> = {
   'building-c': '/assets/city/building-type-c.mtl',
 };
 
+
 export function SceneryModel({
   sceneryType,
   rotation,
