@@ -15,6 +15,27 @@ export interface AdvanceResult {
   zone: DrivingZone;
 }
 
+// 1. ADD THIS HELPER FUNCTION BACK IN
+function calculate_waypoint_distances(curve: THREE.CatmullRomCurve3, wps: any[]): { wp_distances: number[], total_length: number } {
+  const wp_distances = [0];
+  let cumulative_distance = 0;
+  const SAMPLES_PER_SEGMENT = 20; 
+  const temp_pos = new THREE.Vector3();
+  const prev_pos = new THREE.Vector3().copy(curve.points[0]);
+
+  for (let i = 0; i < wps.length - 1; i++) {
+    for (let j = 1; j <= SAMPLES_PER_SEGMENT; j++) {
+      const u = (i + j / SAMPLES_PER_SEGMENT) / (wps.length - 1);
+      curve.getPoint(u, temp_pos);
+      cumulative_distance += prev_pos.distanceTo(temp_pos);
+      prev_pos.copy(temp_pos);
+    }
+    wp_distances.push(cumulative_distance);
+  }
+
+  return { wp_distances, total_length: cumulative_distance };
+}
+
 export function advance_actor(track: WaypointTrack, current_speed: number, current_progress: number, delta: number, acceleration: number, brake: number, top_speed: number): AdvanceResult | null {
   const wps = track.waypoints;
   const segments = wps.length;
@@ -30,9 +51,8 @@ export function advance_actor(track: WaypointTrack, current_speed: number, curre
 
   _curve.points = wps.map(w => new THREE.Vector3(w.position[0], w.position[1], w.position[2]));
   _curve.updateArcLengths();
-  const total_length = _curve.getLength();
 
-  const wp_distances = _curve.getLengths(wps.length - 1);
+  const { wp_distances, total_length } = calculate_waypoint_distances(_curve, wps);
 
   let i = 0;
   while (i < segments - 2 && wp_distances[i + 1] <= current_progress) i++;
@@ -49,8 +69,10 @@ export function advance_actor(track: WaypointTrack, current_speed: number, curre
       const braking_distance = (Math.pow(current_speed, 2) - Math.pow(target, 2)) / (brake * 2);
       const distance_to_next_waypoint = wp_distances[i + 1] - current_progress;
 
-      if (distance_to_next_waypoint < braking_distance) {
-        return Math.max(current_speed - (brake * delta), target);
+      if (distance_to_next_waypoint <= braking_distance + (current_speed * delta)) {
+        const braking = Math.max(current_speed - (brake * delta), target);
+
+        return braking;
       }
     }
 
