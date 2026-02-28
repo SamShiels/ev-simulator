@@ -17,41 +17,51 @@ function downloadBlob(blob: Blob, filename: string): void {
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function useCanvasRecorder(renderPass: RenderPass): void {
   const { gl } = useThree();
   const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const mimeTypeRef = useRef<string>('video/webm');
+  const chunksRef = useRef<Blob[]>([]); // Use a ref for chunks
 
   useEffect(() => {
     if (renderPass !== 'idle') {
-      startRecording();
+      startRecording(renderPass);
     } else {
       stopRecording();
     }
+
+    // Cleanup function to ensure we don't leave recorders hanging
+    return () => stopRecording();
   }, [renderPass]);
 
-  function startRecording(): void {
+  function startRecording(passName: RenderPass): void {
     const canvas = gl.domElement;
     const mimeType = pickMimeType();
-    mimeTypeRef.current = mimeType;
+    
+    // 1. Clear previous chunks
+    chunksRef.current = []; 
 
     const stream = canvas.captureStream(60);
     const recorder = new MediaRecorder(stream, { mimeType });
-    chunksRef.current = [];
 
     recorder.ondataavailable = (e) => {
       if (e.data.size > 0) chunksRef.current.push(e.data);
     };
 
     recorder.onstop = () => {
-      const ext = mimeTypeRef.current.startsWith('video/mp4') ? 'mp4' : 'webm';
-      const blob = new Blob(chunksRef.current, { type: mimeTypeRef.current });
-      downloadBlob(blob, `render-${Date.now()}.${ext}`);
+      const blob = new Blob(chunksRef.current, { type: mimeType });
+      
+      // 2. Stop all tracks to "kill" the stream properly
+      stream.getTracks().forEach(track => track.stop());
+
+      if (blob.size === 0) return;
+      const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+      downloadBlob(blob, `render-${passName}-${Date.now()}.${ext}`);
     };
 
     recorder.start();

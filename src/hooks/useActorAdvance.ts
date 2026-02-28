@@ -55,7 +55,12 @@ export function useActorAdvance(
       if (isEgo) {
         store.setScenarioProgress(result.progress);
         if (rendering && result.progress >= track.length) {
-          store.setRenderPass('idle');
+          if (renderPass === 'rgb') {
+            store.setRenderPass('depth');
+            store.setScenarioProgress(0);
+          } else {
+            store.setRenderPass('idle');
+          }
         }
       }
     } else {
