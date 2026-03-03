@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import type { RoadType, SceneryType, GizmoMode, RenderPass, Block, SceneryItem, Selection } from '../App';
+
+export type RenderStatus = 'idle' | 'rendering' | 'uploading' | 'error';
 import type { Scenario, Waypoint, WaypointTrack, Actor, ActorKind, ActorStats } from '../scenario/types';
 import { defaultScenario, nextActorColor } from '../scenario/defaults';
 import { createSpeedProfile } from '../scenario/interpolate';
@@ -76,6 +78,7 @@ interface EditorState {
   // Playback / UI
   playing: boolean;
   renderPass: RenderPass;
+  renderStatus: RenderStatus;
 }
 
 interface EditorActions {
@@ -127,7 +130,9 @@ interface EditorActions {
   togglePlaying: () => void;
   setScenarioProgress: (t: number) => void;
   setRenderPass: (pass: RenderPass) => void;
+  setRenderStatus: (status: RenderStatus) => void;
   startRender: () => void;
+  cancelRender: () => void;
 
   // UI
   setGizmoMode: (mode: GizmoMode) => void;
@@ -182,6 +187,7 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
 
     playing: false,
     renderPass: 'idle',
+    renderStatus: 'idle',
 
     // ── Road editor actions ────────────────────────────────────────────────
     selectRoadType: (type) => {
@@ -465,7 +471,9 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
     togglePlaying: () => set(s => ({ playing: !s.playing })),
     setScenarioProgress: (t) => set({ scenarioProgress: t }),
     setRenderPass: (pass) => set({ renderPass: pass }),
-    startRender: () => set({ scenarioProgress: 0, playing: false, renderPass: 'rgb' }),
+    setRenderStatus: (status) => set({ renderStatus: status }),
+    startRender: () => set({ scenarioProgress: 0, playing: false, renderPass: 'rgb', renderStatus: 'rendering' }),
+    cancelRender: () => set({ renderPass: 'idle', renderStatus: 'idle' }),
 
     // ── UI actions ─────────────────────────────────────────────────────────
     setGizmoMode: (mode) => set({ gizmoMode: mode }),

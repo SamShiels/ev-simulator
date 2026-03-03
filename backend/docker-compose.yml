@@ -1,0 +1,9 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - COMFY_HOST=${COMFY_HOST:-host.docker.internal:8188}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

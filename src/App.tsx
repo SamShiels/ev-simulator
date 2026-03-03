@@ -6,6 +6,7 @@ import Timeline from './ui/Timeline';
 import HintBar from './ui/HintBar';
 import InspectorPanel from './ui/InspectorPanel';
 import WaypointPopup from './ui/WaypointPopup';
+import RenderOverlay from './ui/RenderOverlay';
 import { useEditorKeyBindings } from './hooks/useEditorKeyBindings';
 import { useEditorStore } from './store/useEditorStore';
 
@@ -55,6 +56,7 @@ export default function App() {
       <HintBar />
       <Timeline />
       <WaypointPopup />
+      <RenderOverlay />
     </div>
   );
 }
