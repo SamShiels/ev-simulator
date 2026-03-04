@@ -27,7 +27,6 @@ function downloadBlob(blob: Blob, filename: string): void {
 export function useCanvasRecorder(renderPass: RenderPass): void {
   const { gl } = useThree();
   const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
   const rgbBlobRef = useRef<Blob | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -55,32 +54,39 @@ export function useCanvasRecorder(renderPass: RenderPass): void {
     const canvas = gl.domElement;
     const mimeType = pickMimeType();
 
-    chunksRef.current = [];
+    const chunks: Blob[] = [];
 
-    const stream = canvas.captureStream(60);
+    const stream = canvas.captureStream(24);
     const recorder = new MediaRecorder(stream, { mimeType });
 
     recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunksRef.current.push(e.data);
+      if (e.data.size > 0) {
+        chunks.push(e.data);
+      }
     };
 
     recorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: mimeType });
       stream.getTracks().forEach(track => track.stop());
 
       if (passName === 'rgb') {
-        rgbBlobRef.current = blob;
+        rgbBlobRef.current = new Blob(chunks, { type: mimeType });
         return;
       }
+
+      const depthBlob = new Blob(chunks, { type: mimeType });
 
       // Depth pass complete — only upload if not cancelled
       const { renderStatus: status } = useEditorStore.getState();
       if (status !== 'rendering') return;
 
       const rgbBlob = rgbBlobRef.current;
-      if (!rgbBlob || blob.size === 0) return;
 
-      uploadRender(rgbBlob, blob, mimeType);
+      if (!rgbBlob || rgbBlob.size === 0) return;
+      if (depthBlob.size === 0) return;
+
+      console.log('[recorder] rgb blob:', `${URL.createObjectURL(rgbBlob)}`);
+      console.log('[recorder] depth blob:', `${URL.createObjectURL(depthBlob)}`);
+      uploadRender(rgbBlob, depthBlob, mimeType);
     };
 
     recorder.start();
@@ -100,7 +106,7 @@ export function useCanvasRecorder(renderPass: RenderPass): void {
     form.append('depth', depthBlob, `depth.${ext}`);
 
     try {
-      const res = await fetch('http://localhost:8000/render', {
+      const res = await fetch('http://192.168.50.124:8000/render', {
         method: 'POST',
         body: form,
         signal: controller.signal,
@@ -108,6 +114,7 @@ export function useCanvasRecorder(renderPass: RenderPass): void {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const resultBlob = await res.blob();
+      console.log('[recorder] result blob:', URL.createObjectURL(resultBlob));
       downloadBlob(resultBlob, `sim-to-real-${Date.now()}.mp4`);
       useEditorStore.getState().setRenderStatus('idle');
     } catch (e) {
