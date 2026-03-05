@@ -472,7 +472,7 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
     setScenarioProgress: (t) => set({ scenarioProgress: t }),
     setRenderPass: (pass) => set({ renderPass: pass }),
     setRenderStatus: (status) => set({ renderStatus: status }),
-    startRender: () => set({ scenarioProgress: 0, playing: false, renderPass: 'rgb', renderStatus: 'rendering' }),
+    startRender: () => set({ scenarioProgress: 0, playing: false, renderPass: 'depth', renderStatus: 'rendering' }),
     cancelRender: () => set({ renderPass: 'idle', renderStatus: 'idle' }),
 
     // ── UI actions ─────────────────────────────────────────────────────────
