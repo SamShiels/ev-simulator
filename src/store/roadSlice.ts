@@ -20,7 +20,19 @@ export type RoadSlice = {
 };
 
 export const createRoadSlice: StateCreator<EditorStore, [], [], RoadSlice> = (set, get) => ({
-  blocks: [{ id: 'default-0', position: [0, 0, 0], roadType: 'straight', rotation: 1 }],
+  blocks: [
+    // Road — 3 straight tiles running through centre
+    { id: 'default-road-0', position: [0,   0, -2.5], roadType: 'straight', rotation: 1 },
+    { id: 'default-road-1', position: [0,   0,  0  ], roadType: 'straight', rotation: 1 },
+    { id: 'default-road-2', position: [0,   0,  2.5], roadType: 'straight', rotation: 1 },
+    // Pavement — surrounding 6 tiles
+    { id: 'default-pave-0', position: [-2.5, 0, -2.5], roadType: 'pavement', rotation: 0 },
+    { id: 'default-pave-1', position: [-2.5, 0,  0  ], roadType: 'pavement', rotation: 0 },
+    { id: 'default-pave-2', position: [-2.5, 0,  2.5], roadType: 'pavement', rotation: 0 },
+    { id: 'default-pave-3', position: [ 2.5, 0, -2.5], roadType: 'pavement', rotation: 0 },
+    { id: 'default-pave-4', position: [ 2.5, 0,  0  ], roadType: 'pavement', rotation: 0 },
+    { id: 'default-pave-5', position: [ 2.5, 0,  2.5], roadType: 'pavement', rotation: 0 },
+  ],
   selectedRoadType: null,
   ghostRotation: 1,
   gizmoMode: 'translate',
