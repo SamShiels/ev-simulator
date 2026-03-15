@@ -15,7 +15,7 @@ from fastapi.responses import Response
 
 COMFY_HOST = os.environ.get("COMFY_HOST", "127.0.0.1:8188")
 CLIENT_ID = str(uuid.uuid4())
-WORKFLOW_PATH = os.path.join(os.path.dirname(__file__), "wan_api.json")
+WORKFLOW_PATH = os.path.join(os.path.dirname(__file__), "api.json")
 
 app = FastAPI()
 
@@ -35,8 +35,8 @@ def get_frame_count(video_bytes: bytes) -> int:
         return sum(1 for _ in container.decode(stream))
 
 
-def upload_to_comfy(file_bytes: bytes, filename: str) -> str:
-    files = {"image": (filename, file_bytes, "video/mp4")}
+def upload_to_comfy(file_bytes: bytes, filename: str, content_type: str = "video/mp4") -> str:
+    files = {"image": (filename, file_bytes, content_type)}
     res = requests.post(f"http://{COMFY_HOST}/upload/image", files=files)
     res.raise_for_status()
     return res.json()["name"]
@@ -88,20 +88,18 @@ def fetch_output_video(prompt_id: str) -> bytes:
 @app.post("/render")
 def render(
     depth: UploadFile = File(...),
-    rgb: UploadFile = File(...),
     prompt: str = Form(default="Photorealistic dashcam footage, driving down a road, heavy rain, glowing streetlights reflecting on wet asphalt, cinematic lighting, 8k resolution."),
 ):
     depth_bytes = depth.file.read()
     length = get_frame_count(depth_bytes)
     depth_name = upload_to_comfy(depth_bytes, depth.filename or "depth.mp4")
-    rgb_name = upload_to_comfy(rgb.file.read(), rgb.filename or "rgb.mp4")
 
     with open(WORKFLOW_PATH) as f:
         workflow = json.load(f)
 
-    workflow["1"]["inputs"]["video"] = rgb_name
-    workflow["2"]["inputs"]["video"] = depth_name
-    workflow["5"]["inputs"]["text"] = prompt
+    workflow["4"]["inputs"]["text"] = prompt
+    workflow["6"]["inputs"]["video"] = depth_name
+    workflow["7"]["inputs"]["image"] = "dash.jpg"
     workflow["8"]["inputs"]["length"] = length
 
     prompt_id = queue_prompt(workflow)

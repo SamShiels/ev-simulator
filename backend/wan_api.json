@@ -105,6 +105,10 @@
         "3",
         0
       ],
+      "start_image": [
+        "1",
+        0
+      ],
       "control_video": [
         "2",
         0
@@ -119,10 +123,10 @@
     "inputs": {
       "seed": 448606391046303,
       "steps": 25,
-      "cfg": 2.5,
+      "cfg": 5.5,
       "sampler_name": "euler",
       "scheduler": "normal",
-      "denoise": 1,
+      "denoise": 0.9,
       "model": [
         "7",
         0

@@ -5,7 +5,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY server.py wan_api.json ./
+COPY server.py api.json ./
 
 EXPOSE 8000
 
