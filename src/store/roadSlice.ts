@@ -37,7 +37,7 @@ export const createRoadSlice: StateCreator<EditorStore, [], [], RoadSlice> = (se
   ghostRotation: 1,
   gizmoMode: 'translate',
 
-  selectRoadType: (type) => set({ selectedRoadType: type, selectedSceneryType: null }),
+  selectRoadType: (type) => set({ selectedRoadType: type, selectedSceneryType: null, selectedActorKind: null }),
 
   rotateGhost: () => set(s => ({ ghostRotation: (s.ghostRotation + 1) % 4 })),
 

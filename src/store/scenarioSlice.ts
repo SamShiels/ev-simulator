@@ -34,7 +34,10 @@ function isEvenlyDistributed(waypoints: Waypoint[], duration: number): boolean {
 
 export type ScenarioSlice = {
   scenario: Scenario;
+  selectedActorKind: ActorKind | null;
 
+  selectActorKind: (kind: ActorKind | null) => void;
+  placeActor: (pos: [number, number, number]) => void;
   addActor: (kind: ActorKind) => void;
   removeActor: (id: string) => void;
   setActorStats: (id: string, stats: Partial<ActorStats>) => void;
@@ -72,6 +75,45 @@ export const createScenarioSlice: StateCreator<EditorStore, [], [], ScenarioSlic
 
   return {
     scenario: defaultScenario(),
+    selectedActorKind: null,
+
+    selectActorKind: (kind) => set({ selectedActorKind: kind, selectedRoadType: null, selectedSceneryType: null }),
+
+    placeActor: (pos) => {
+      const { selectedActorKind, scenario } = get();
+      if (!selectedActorKind) return;
+      const id = uid();
+      const count = scenario.actors.length;
+      const kindLabels: Record<ActorKind, string> = {
+        pedestrian: 'Pedestrian',
+        stroller: 'Stroller',
+        vehicle: 'Vehicle',
+      };
+      const defaults = KIND_DEFAULTS[selectedActorKind];
+      const actor: Actor = {
+        id,
+        kind: selectedActorKind,
+        label: `${kindLabels[selectedActorKind]} ${count + 1}`,
+        color: nextActorColor(count),
+        accel: defaults.accel,
+        brake: defaults.brake,
+        topSpeed: defaults.topSpeed,
+      };
+      const track: WaypointTrack = { actorId: id, waypoints: [{ id: uid(), time: 0, position: pos, targetSpeed: defaults.topSpeed / 2 }], length: 0 };
+      set({
+        scenario: {
+          ...scenario,
+          actors: [...scenario.actors, actor],
+          tracks: [...scenario.tracks, track],
+        },
+        selection: { kind: 'actor', id },
+        drawingPath: true,
+        selectedActorKind: null,
+        selectedWaypointId: null,
+        selectedWaypointActorId: null,
+        waypointPopupPos: null,
+      });
+    },
 
     addActor: (kind) => {
       const { scenario } = get();

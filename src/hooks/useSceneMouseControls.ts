@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import * as THREE from 'three';
 import type { Block, RoadType, SceneryItem, SceneryType } from '../App';
+import type { ActorKind } from '../scenario/types';
 import { TILE_SIZE, SCENERY_GRID_SIZE } from '../constants';
 import { useViewportControls } from './useViewportControls';
 
@@ -20,6 +21,7 @@ interface Options {
   selectedId: string | null;
   selectedRoadType: RoadType | null;
   selectedSceneryType: SceneryType | null;
+  selectedActorKind: ActorKind | null;
   onPlace: (pos: [number, number, number]) => void;
   onRotate: () => void;
   onSelectBlock: (id: string) => void;
@@ -29,6 +31,8 @@ interface Options {
   onRotateScenery: () => void;
   onSelectSceneryItem: (id: string) => void;
   onCancelScenery: () => void;
+  onPlaceActor: (pos: [number, number, number]) => void;
+  onCancelActor: () => void;
 }
 
 export interface SceneMouseControls {
@@ -37,24 +41,26 @@ export interface SceneMouseControls {
 }
 
 export function useSceneMouseControls({
-  gl, camera, blocks, sceneryItems, selectedId, selectedRoadType, selectedSceneryType,
+  gl, camera, blocks, sceneryItems, selectedId, selectedRoadType, selectedSceneryType, selectedActorKind,
   onPlace, onRotate, onSelectBlock, onDeselect, onCancelPlacement,
   onPlaceScenery, onRotateScenery, onSelectSceneryItem, onCancelScenery,
+  onPlaceActor, onCancelActor,
 }: Options): SceneMouseControls {
   const [ghost, setGhost] = useState<[number, number, number] | null>(null);
   const isDraggingGizmoRef = useRef(false);
 
   // Keep refs for latest state values...
-  const state = useRef({ blocks, sceneryItems, selectedId, selectedRoadType, selectedSceneryType });
-  state.current = { blocks, sceneryItems, selectedId, selectedRoadType, selectedSceneryType };
+  const state = useRef({ blocks, sceneryItems, selectedId, selectedRoadType, selectedSceneryType, selectedActorKind });
+  state.current = { blocks, sceneryItems, selectedId, selectedRoadType, selectedSceneryType, selectedActorKind };
 
   useViewportControls({
     gl,
     camera,
     onGroundMove: (pos) => {
-      const { selectedRoadType, selectedSceneryType, selectedId } = state.current;
-      if (!isDraggingGizmoRef.current && !selectedId && (selectedRoadType !== null || selectedSceneryType !== null) && pos) {
-        setGhost(selectedSceneryType !== null ? snapScenery(pos) : snap(pos));
+      const { selectedRoadType, selectedSceneryType, selectedActorKind, selectedId } = state.current;
+      const hasPlacement = selectedRoadType !== null || selectedSceneryType !== null || selectedActorKind !== null;
+      if (!isDraggingGizmoRef.current && !selectedId && hasPlacement && pos) {
+        setGhost(selectedRoadType !== null ? snap(pos) : snapScenery(pos));
       } else {
         setGhost(null);
       }
@@ -64,6 +70,11 @@ export function useSceneMouseControls({
       const { selectedRoadType, selectedSceneryType, selectedId, blocks, sceneryItems } = state.current;
       const snappedPos = snap(pos);
       const snappedSceneryPos = snapScenery(pos);
+
+      if (selectedActorKind !== null) {
+        onPlaceActor(snappedSceneryPos);
+        return;
+      }
 
       if (selectedSceneryType !== null) {
         onPlaceScenery(snappedSceneryPos);
@@ -101,6 +112,10 @@ export function useSceneMouseControls({
       if (state.current.selectedSceneryType !== null) {
         setGhost(null);
         onCancelScenery();
+      }
+      if (state.current.selectedActorKind !== null) {
+        setGhost(null);
+        onCancelActor();
       }
     },
     onKeyDown: (e) => {

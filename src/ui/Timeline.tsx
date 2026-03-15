@@ -100,7 +100,9 @@ export default function Timeline() {
 
   const selectedActorId = selectionActorId(selection);
   const selectedWaypointId = useEditorStore(s => s.selectedWaypointId);
-  const trackLength = scenario.egoTrack.length;
+  
+  const actorTracks = scenario.tracks.map((a) => a.length);
+  const trackLength = Math.max(scenario.egoTrack.length, Math.max(...actorTracks));
 
   function scrubToFrac(frac: number) {
     setScenarioProgress(frac * trackLength);

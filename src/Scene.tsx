@@ -6,7 +6,7 @@ import SceneryMesh from './visuals/SceneryMesh';
 import SelectionGizmo from './visuals/SelectionGizmo';
 import WaypointMarker from './visuals/WaypointMarker';
 import TrackLine from './visuals/TrackLine';
-import ActorMesh from './visuals/ActorMesh';
+import ActorMesh, { PedestrianMesh, StrollerMesh, VehicleMesh } from './visuals/ActorMesh';
 import ScenarioActor from './ScenarioActor';
 import { useSceneMouseControls } from './hooks/useSceneMouseControls';
 import { useScenarioMouseControls } from './hooks/useScenarioMouseControls';
@@ -55,6 +55,9 @@ export default function Scene() {
   const rotateSceneryItem = useEditorStore(s => s.rotateSceneryItem);
 
   const drawingPath = useEditorStore(s => s.drawingPath);
+  const selectedActorKind = useEditorStore(s => s.selectedActorKind);
+  const placeActor = useEditorStore(s => s.placeActor);
+  const selectActorKind = useEditorStore(s => s.selectActorKind);
 
   const rendering = renderPass !== 'idle';
   const selectedId = selectionTileId(selection);
@@ -76,6 +79,7 @@ export default function Scene() {
     selectedId,
     selectedRoadType,
     selectedSceneryType,
+    selectedActorKind,
     onPlace: placeBlock,
     onRotate: rotateGhost,
     onSelectBlock: selectBlock,
@@ -85,6 +89,8 @@ export default function Scene() {
     onRotateScenery: rotateSceneryGhost,
     onSelectSceneryItem: selectSceneryItem,
     onCancelScenery: () => selectSceneryType(null),
+    onPlaceActor: placeActor,
+    onCancelActor: () => selectActorKind(null),
   });
 
   useScenarioMouseControls({
@@ -164,6 +170,14 @@ export default function Scene() {
             />
           )}
 
+          {ghost && selectedActorKind && (
+            <group position={[ghost[0], 0, ghost[2]]}>
+              {selectedActorKind === 'pedestrian' && <PedestrianMesh color="#9ca3af" ghost />}
+              {selectedActorKind === 'stroller' && <StrollerMesh color="#9ca3af" ghost />}
+              {selectedActorKind === 'vehicle' && <VehicleMesh color="#9ca3af" ghost />}
+            </group>
+          )}
+
           {selectedBlock && (
             <SelectionGizmo
               position={selectedBlock.position}
@@ -184,7 +198,7 @@ export default function Scene() {
             />
           )}
 
-          {drawingPath && selectedTrack && (() => {
+          {selectedTrack && (() => {
             const color = actorColorMap[selectedTrack.actorId] ?? '#ffffff';
             return (
               <group key={selectedTrack.actorId}>
@@ -217,13 +231,6 @@ export default function Scene() {
                   <sphereGeometry args={[GHOST_WP_SPHERE_RADIUS, 10, 8]} />
                   <meshBasicMaterial color={color} transparent opacity={0.4} />
                 </mesh>
-                {ghostActor && (
-                  <ActorMesh
-                    actor={ghostActor}
-                    pose={{ position: [0, 0, 0], yaw: 0 }}
-                    ghost
-                  />
-                )}
               </group>
             );
           })()}

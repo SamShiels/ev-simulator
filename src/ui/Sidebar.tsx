@@ -70,7 +70,8 @@ function PlacementDropdown() {
   const selectedSceneryType = useEditorStore(s => s.selectedSceneryType);
   const selectRoadType = useEditorStore(s => s.selectRoadType);
   const selectSceneryType = useEditorStore(s => s.selectSceneryType);
-  const addActor = useEditorStore(s => s.addActor);
+  const selectedActorKind = useEditorStore(s => s.selectedActorKind);
+  const selectActorKind = useEditorStore(s => s.selectActorKind);
   const setDrawingPath = useEditorStore(s => s.setDrawingPath);
 
   useEffect(() => {
@@ -97,7 +98,7 @@ function PlacementDropdown() {
   }
 
   function handleActorClick(kind: ActorKind) {
-    addActor(kind);
+    selectActorKind(selectedActorKind === kind ? null : kind);
     setDrawingPath(false);
     setOpen(false);
   }
@@ -105,6 +106,7 @@ function PlacementDropdown() {
   const activeLabel =
     ROAD_TYPES.find(r => r.type === selectedRoadType)?.label ??
     SCENERY_TYPES.find(s => s.type === selectedSceneryType)?.label ??
+    ACTOR_KINDS.find(a => a.kind === selectedActorKind)?.label ??
     null;
 
   return (
@@ -168,7 +170,12 @@ function PlacementDropdown() {
             <button
               key={kind}
               onClick={() => handleActorClick(kind)}
-              className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-xs text-white/60 hover:bg-white/10 hover:text-white transition-all"
+              className={cn(
+                'w-full text-left flex items-center gap-2 px-3 py-1.5 text-xs transition-all',
+                selectedActorKind === kind
+                  ? 'bg-white/20 text-white'
+                  : 'text-white/60 hover:bg-white/10 hover:text-white',
+              )}
             >
               <div className="w-7 h-7 rounded shrink-0 overflow-hidden"><ActorPreview kind={kind} cameraPos={cameraPos} /></div>
               {label}

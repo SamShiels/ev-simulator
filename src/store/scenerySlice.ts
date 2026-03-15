@@ -59,7 +59,7 @@ export const createScenerySlice: StateCreator<EditorStore, [], [], ScenerySlice>
   selectedWaypointActorId: null,
   waypointPopupPos: null,
 
-  selectSceneryType: (type) => set({ selectedSceneryType: type, selectedRoadType: null }),
+  selectSceneryType: (type) => set({ selectedSceneryType: type, selectedRoadType: null, selectedActorKind: null }),
 
   placeSceneryItem: (pos) => {
     const { selectedSceneryType, sceneryGhostRotation, sceneryItems } = get();
