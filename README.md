@@ -2,6 +2,8 @@
 
 An interactive 3D scene editor for scripting autonomous EV testing scenarios. Design road layouts, choreograph actor movements, and export depth/edge-conditioned videos that get enhanced into photorealistic dashcam footage via ComfyUI — producing synthetic training data for self-driving car models.
 
+**This is a hobby project**
+
 ## Demo
 
 ### Path Editing
