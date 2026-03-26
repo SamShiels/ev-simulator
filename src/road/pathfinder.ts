@@ -1,85 +1,103 @@
-import { TILE_SIZE } from '@/constants'
-import type { Block } from '../App'
+import { TILE_SIZE } from '@/constants';
+import type { GridCell } from '../App';
+import { GRID_SIZE } from '../constants';
+import { ROAD_TYPE_MAP } from '../App';
 
-export type Dir = 'N' | 'E' | 'S' | 'W'
+export type Dir = 'N' | 'E' | 'S' | 'W';
 
 export interface PathStep {
-  block: Block
-  fromDir: Dir // direction we entered from
-  toDir: Dir   // direction we exit toward
+  row: number;
+  col: number;
+  roadType: string;
+  rotation: number;
+  worldPos: [number, number, number];
+  fromDir: Dir;
+  toDir: Dir;
 }
 
-// Grid step size matches the tile snap increment
 const DIR_DELTA: Record<Dir, [number, number]> = {
-  N: [0, -TILE_SIZE],
-  E: [TILE_SIZE,  0],
-  S: [0,  TILE_SIZE],
-  W: [-TILE_SIZE, 0],
+  N: [-1, 0],
+  E: [0, 1],
+  S: [1, 0],
+  W: [0, -1],
+};
+
+const OPPOSITE: Record<Dir, Dir> = { N: 'S', S: 'N', E: 'W', W: 'E' };
+
+function gridToWorld(row: number, col: number): [number, number, number] {
+  const half = Math.floor(GRID_SIZE / 2);
+  return [(col - half) * TILE_SIZE, 0, (row - half) * TILE_SIZE];
 }
 
-const OPPOSITE: Record<Dir, Dir> = { N: 'S', S: 'N', E: 'W', W: 'E' }
-
-// The two open edges for each tile type + rotation.
-//
-// Base model orientations (rotation=0, from .obj geometry):
-//   straight: W + E   corner: W + S
-//
-// Corner exits indexed by r = (block.rotation + 1) % 4:
-//   r=0 → N,W   r=1 → W,S   r=2 → S,E   r=3 → E,N
-function getTileExits(block: Block): [Dir, Dir] {
-  const r = ((block.rotation % 4) + 4) % 4
-  if (block.roadType === 'straight') {
-    return r % 2 === 0 ? ['E', 'W'] : ['N', 'S']
+function getTileExits(roadType: string, rotation: number): [Dir, Dir] | null {
+  const r = ((rotation % 4) + 4) % 4;
+  if (roadType === 'straight') {
+    return r % 2 === 0 ? ['E', 'W'] : ['N', 'S'];
   }
-  const CORNER_EXITS: [Dir, Dir][] = [
-    ['W', 'S'], // r=0: South-West
-    ['S', 'E'], // r=1: South-East
-    ['E', 'N'], // r=2: North-East
-    ['N', 'W'], // r=3: North-West
-  ]
-  return CORNER_EXITS[r]
+  if (roadType === 'corner') {
+    const CORNER_EXITS: [Dir, Dir][] = [
+      ['W', 'S'],
+      ['S', 'E'],
+      ['E', 'N'],
+      ['N', 'W'],
+    ];
+    return CORNER_EXITS[r];
+  }
+  return null;
 }
 
-function blockKey(b: Block) {
-  return `${b.position[0]},${b.position[2]}`
-}
+const START_DIR: Dir = 'S';
 
-// The direction the path starts moving from the 0,0 tile.
-const START_DIR: Dir = 'S'
+export function findRoadPath(grid: GridCell[][]): PathStep[] | null {
+  if (grid.length === 0) return null;
 
-// Walk the road starting at block (0,0) in START_DIR, following connected tiles
-// until a tile has no exit that connects to the next one.
-export function findRoadPath(blocks: Block[]): PathStep[] | null {
-  if (blocks.length === 0) return null
+  const half = Math.floor(GRID_SIZE / 2);
+  const startRow = half;
+  const startCol = half;
 
-  const tileMap = new Map(blocks.map(b => [blockKey(b), b]))
-  const startBlock = tileMap.get('0,0')
-  if (!startBlock) return null
+  const startCell = grid[startRow]?.[startCol];
+  if (!startCell) return null;
 
-  const steps: PathStep[] = []
-  let current = startBlock
-  let fromDir: Dir = OPPOSITE[START_DIR]
-  let toDir: Dir = START_DIR
+  const startType = ROAD_TYPE_MAP[startCell.type];
+  if (!startType || startType === 'pavement') return null;
 
-  for (let guard = 0; guard < blocks.length; guard++) {
-    const exits = getTileExits(current)
-    if (!exits.includes(toDir)) break
+  const steps: PathStep[] = [];
+  let row = startRow;
+  let col = startCol;
+  let fromDir: Dir = OPPOSITE[START_DIR];
+  let toDir: Dir = START_DIR;
 
-    steps.push({ block: current, fromDir, toDir })
+  const maxIter = GRID_SIZE * GRID_SIZE;
+  for (let guard = 0; guard < maxIter; guard++) {
+    const cell = grid[row]?.[col];
+    if (!cell) break;
 
-    const [dx, dz] = DIR_DELTA[toDir]
-    const [cx, , cz] = current.position
-    const next = tileMap.get(`${cx + dx},${cz + dz}`)
-    if (!next) break
+    const roadType = ROAD_TYPE_MAP[cell.type];
+    if (!roadType || roadType === 'pavement') break;
 
-    const entryDir = OPPOSITE[toDir]
-    const nextExits = getTileExits(next)
-    if (!nextExits.includes(entryDir)) break
+    const exits = getTileExits(roadType, cell.rotation);
+    if (!exits || !exits.includes(toDir)) break;
 
-    fromDir = entryDir
-    toDir = nextExits.find(d => d !== entryDir)!
-    current = next
+    steps.push({ row, col, roadType, rotation: cell.rotation, worldPos: gridToWorld(row, col), fromDir, toDir });
+
+    const [dr, dc] = DIR_DELTA[toDir];
+    const nextRow = row + dr;
+    const nextCol = col + dc;
+    const nextCell = grid[nextRow]?.[nextCol];
+    if (!nextCell) break;
+
+    const nextType = ROAD_TYPE_MAP[nextCell.type];
+    if (!nextType || nextType === 'pavement') break;
+
+    const entryDir = OPPOSITE[toDir];
+    const nextExits = getTileExits(nextType, nextCell.rotation);
+    if (!nextExits || !nextExits.includes(entryDir)) break;
+
+    fromDir = entryDir;
+    toDir = nextExits.find(d => d !== entryDir)!;
+    row = nextRow;
+    col = nextCol;
   }
 
-  return steps.length >= 1 ? steps : null
+  return steps.length >= 1 ? steps : null;
 }

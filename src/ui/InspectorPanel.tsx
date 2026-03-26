@@ -7,9 +7,7 @@ type StatField = keyof ActorStats;
 export default function InspectorPanel() {
   const selection = useEditorStore(s => s.selection);
   const scenario = useEditorStore(s => s.scenario);
-  const blocks = useEditorStore(s => s.blocks);
   const sceneryItems = useEditorStore(s => s.sceneryItems);
-  const deleteSelectedBlock = useEditorStore(s => s.deleteSelectedBlock);
   const deleteSelectedScenery = useEditorStore(s => s.deleteSelectedScenery);
   const setActorStats = useEditorStore(s => s.setActorStats);
   const setEgoStats = useEditorStore(s => s.setEgoStats);
@@ -18,19 +16,7 @@ export default function InspectorPanel() {
   let onStatChange: (field: StatField, value: number) => void = () => {};
   let onDelete: () => void = () => {};
 
-  if (selection?.kind === 'tile') {
-    const block = blocks.find(b => b.id === selection.id);
-    if (block) {
-      inspectedObject = {
-        kind: 'tile',
-        id: block.id,
-        position: block.position,
-        roadType: block.roadType,
-        rotation: block.rotation,
-      };
-      onDelete = deleteSelectedBlock;
-    }
-  } else if (selection?.kind === 'scenery') {
+  if (selection?.kind === 'scenery') {
     const item = sceneryItems.find(s => s.id === selection.id);
     if (item) {
       inspectedObject = {

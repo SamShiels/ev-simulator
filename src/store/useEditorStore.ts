@@ -14,4 +14,4 @@ export const useEditorStore = create<EditorStore>()((...a) => ({
 }));
 
 export type { RenderStatus } from './playbackSlice';
-export { selectionActorId, selectionTileId, selectionSceneryId } from './scenerySlice';
+export { selectionActorId, selectionSceneryId } from './scenerySlice';

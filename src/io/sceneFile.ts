@@ -1,18 +1,18 @@
 import { useEditorStore } from '../store/useEditorStore';
-import type { Block, SceneryItem } from '../App';
+import type { GridCell, SceneryItem } from '../App';
 import type { Scenario } from '../scenario/types';
 
 export interface SceneFile {
   version: 1;
-  blocks: Block[];
+  roadGrid: GridCell[][];
   sceneryItems: SceneryItem[];
   scenario: Scenario;
   simulationPrompt: string;
 }
 
 export function saveScene(): void {
-  const { blocks, sceneryItems, scenario, simulationPrompt } = useEditorStore.getState();
-  const data: SceneFile = { version: 1, blocks, sceneryItems, scenario, simulationPrompt };
+  const { roadGrid, sceneryItems, scenario, simulationPrompt } = useEditorStore.getState();
+  const data: SceneFile = { version: 1, roadGrid, sceneryItems, scenario, simulationPrompt };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -32,7 +32,7 @@ export function loadScene(file: File): void {
         return;
       }
       useEditorStore.setState({
-        blocks: data.blocks,
+        roadGrid: data.roadGrid,
         sceneryItems: data.sceneryItems,
         scenario: data.scenario,
         simulationPrompt: data.simulationPrompt,

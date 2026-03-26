@@ -1,17 +1,17 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { cn } from '@/lib/utils';
-import type { RoadType, SceneryType } from '../App';
+import type { SceneryType, RoadType } from '../App';
 import type { ActorKind } from '../scenario/types';
 import { RoadTileModel } from '../visuals/RoadTile';
 import { SceneryModel } from '../visuals/SceneryMesh';
 import { PedestrianMesh, StrollerMesh, VehicleMesh } from '../visuals/ActorMesh';
-import { useEditorStore, selectionTileId, selectionSceneryId } from '../store/useEditorStore';
+import { useEditorStore, selectionSceneryId } from '../store/useEditorStore';
 
-const ROAD_TYPES: { type: RoadType; label: string }[] = [
-  { type: 'straight', label: 'Straight' },
-  { type: 'corner',   label: 'Corner' },
-  { type: 'pavement', label: 'Pavement' },
+const ROAD_IDS: { id: number; type: RoadType; label: string }[] = [
+  { id: 0, type: 'pavement', label: 'Pavement' },
+  { id: 1, type: 'straight', label: 'Straight' },
+  { id: 2, type: 'corner',   label: 'Corner' },
 ];
 
 const SCENERY_TYPES: { type: SceneryType; label: string }[] = [
@@ -66,9 +66,9 @@ function PlacementDropdown() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const selectedRoadType = useEditorStore(s => s.selectedRoadType);
+  const selectedRoadId = useEditorStore(s => s.selectedRoadId);
   const selectedSceneryType = useEditorStore(s => s.selectedSceneryType);
-  const selectRoadType = useEditorStore(s => s.selectRoadType);
+  const selectRoadId = useEditorStore(s => s.selectRoadId);
   const selectSceneryType = useEditorStore(s => s.selectSceneryType);
   const selectedActorKind = useEditorStore(s => s.selectedActorKind);
   const selectActorKind = useEditorStore(s => s.selectActorKind);
@@ -85,8 +85,8 @@ function PlacementDropdown() {
     return () => document.removeEventListener('pointerdown', handlePointerDown);
   }, [open]);
 
-  function handleRoadClick(type: RoadType) {
-    selectRoadType(selectedRoadType === type ? null : type);
+  function handleRoadClick(id: number) {
+    selectRoadId(selectedRoadId === id ? null : id);
     setDrawingPath(false);
     setOpen(false);
   }
@@ -104,7 +104,7 @@ function PlacementDropdown() {
   }
 
   const activeLabel =
-    ROAD_TYPES.find(r => r.type === selectedRoadType)?.label ??
+    ROAD_IDS.find(r => r.id === selectedRoadId)?.label ??
     SCENERY_TYPES.find(s => s.type === selectedSceneryType)?.label ??
     ACTOR_KINDS.find(a => a.kind === selectedActorKind)?.label ??
     null;
@@ -132,13 +132,13 @@ function PlacementDropdown() {
       {open && (
         <div className="absolute top-full left-3 right-3 mt-1 rounded-xl backdrop-blur-xl bg-[#1a1a1a]/90 border border-white/15 shadow-2xl z-50 py-1 overflow-hidden">
           <p className="text-[10px] font-semibold tracking-widest uppercase text-white/40 px-3 pt-2 pb-1">Roads</p>
-          {ROAD_TYPES.map(({ type, label }) => (
+          {ROAD_IDS.map(({ id, type, label }) => (
             <button
-              key={type}
-              onClick={() => handleRoadClick(type)}
+              key={id}
+              onClick={() => handleRoadClick(id)}
               className={cn(
                 'w-full text-left flex items-center gap-2 px-3 py-1.5 text-xs transition-all',
-                selectedRoadType === type
+                selectedRoadId === id
                   ? 'bg-white/20 text-white'
                   : 'text-white/60 hover:bg-white/10 hover:text-white',
               )}
@@ -190,16 +190,11 @@ function PlacementDropdown() {
 export default function Sidebar() {
   const selection = useEditorStore(s => s.selection);
   const scenario = useEditorStore(s => s.scenario);
-  const blocks = useEditorStore(s => s.blocks);
   const sceneryItems = useEditorStore(s => s.sceneryItems);
   const selectActor = useEditorStore(s => s.selectActor);
-  const selectBlock = useEditorStore(s => s.selectBlock);
   const selectSceneryItem = useEditorStore(s => s.selectSceneryItem);
   const removeActor = useEditorStore(s => s.removeActor);
-  const selectRoadType = useEditorStore(s => s.selectRoadType);
-  const setDrawingPath = useEditorStore(s => s.setDrawingPath);
 
-  const tileId = selectionTileId(selection);
   const sceneryId = selectionSceneryId(selection);
 
   return (
@@ -251,34 +246,6 @@ export default function Sidebar() {
             </button>
           </div>
         ))}
-
-        {/* Road blocks */}
-        {blocks.map(block => {
-          const isOrigin = block.position[0] === 0 && block.position[2] === 0;
-          const isSelected = tileId === block.id;
-          const label = block.roadType.charAt(0).toUpperCase() + block.roadType.slice(1);
-          const pos = `(${block.position[0]}, ${block.position[2]})`;
-          return (
-            <div
-              key={block.id}
-              onClick={() => { selectBlock(block.id); selectRoadType(null); setDrawingPath(false); }}
-              className={cn(
-                'flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-all',
-                isSelected ? 'bg-white/20 text-white' : 'text-white/50 hover:text-white hover:bg-white/10',
-              )}
-            >
-              <span className="w-2.5 h-2.5 rounded-sm shrink-0 bg-white/20" />
-              <span className="flex-1 truncate">{label}</span>
-              <span className="font-mono text-[10px] text-white/30">{pos}</span>
-              {isOrigin && (
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="text-white/20 shrink-0">
-                  <rect x="3" y="11" width="18" height="11" rx="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-              )}
-            </div>
-          );
-        })}
 
         {/* Scenery items */}
         {sceneryItems.map(item => {

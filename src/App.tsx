@@ -15,12 +15,16 @@ export type SceneryType = 'building-a' | 'building-b' | 'building-c';
 export type GizmoMode = 'translate' | 'rotate';
 export type RenderPass = 'idle' | 'rgb' | 'depth' | 'edge';
 
-export interface Block {
-  id: string;
-  position: [number, number, number];
-  roadType: RoadType;
+export interface GridCell {
+  type: number;     // 0 = pavement, 1 = straight, 2 = corner
   rotation: number; // 0–3, each step = 90°
 }
+
+export const ROAD_TYPE_MAP: Record<number, RoadType> = {
+  0: 'pavement',
+  1: 'straight',
+  2: 'corner',
+};
 
 export interface SceneryItem {
   id: string;
@@ -30,7 +34,6 @@ export interface SceneryItem {
 }
 
 export type Selection =
-  | { kind: 'tile';    id: string }
   | { kind: 'actor';   id: string }
   | { kind: 'scenery'; id: string }
   | null;

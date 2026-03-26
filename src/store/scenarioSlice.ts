@@ -77,7 +77,7 @@ export const createScenarioSlice: StateCreator<EditorStore, [], [], ScenarioSlic
     scenario: defaultScenario(),
     selectedActorKind: null,
 
-    selectActorKind: (kind) => set({ selectedActorKind: kind, selectedRoadType: null, selectedSceneryType: null }),
+    selectActorKind: (kind) => set({ selectedActorKind: kind, selectedRoadId: null, selectedSceneryType: null }),
 
     placeActor: (pos) => {
       const { selectedActorKind, scenario } = get();

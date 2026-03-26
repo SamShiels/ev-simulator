@@ -21,8 +21,8 @@ export function getRoadWaypoints(steps: PathStep[]): THREE.Vector3[] {
   if (steps.length === 0) return [];
   const points: THREE.Vector3[] = [];
 
-  steps.forEach(({ block, fromDir, toDir }, i) => {
-    const [cx, , cz] = block.position;
+  steps.forEach(({ worldPos, fromDir, toDir }, i) => {
+    const [cx, , cz] = worldPos;
     const [fdx, fdz] = DIR_XZ[fromDir];
     const [tdx, tdz] = DIR_XZ[toDir];
     const lEx = -fdz, lEz = fdx;

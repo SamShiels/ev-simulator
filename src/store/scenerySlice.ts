@@ -15,10 +15,6 @@ export function selectionActorId(selection: Selection): string {
   return 'ego';
 }
 
-export function selectionTileId(selection: Selection): string | null {
-  return selection?.kind === 'tile' ? selection.id : null;
-}
-
 export function selectionSceneryId(selection: Selection): string | null {
   return selection?.kind === 'scenery' ? selection.id : null;
 }
@@ -59,7 +55,7 @@ export const createScenerySlice: StateCreator<EditorStore, [], [], ScenerySlice>
   selectedWaypointActorId: null,
   waypointPopupPos: null,
 
-  selectSceneryType: (type) => set({ selectedSceneryType: type, selectedRoadType: null, selectedActorKind: null }),
+  selectSceneryType: (type) => set({ selectedSceneryType: type, selectedRoadId: null, selectedActorKind: null }),
 
   placeSceneryItem: (pos) => {
     const { selectedSceneryType, sceneryGhostRotation, sceneryItems } = get();

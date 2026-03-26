@@ -1,15 +1,7 @@
-import type { RoadType, SceneryType } from '../App';
+import type { SceneryType } from '../App';
 import type { ActorKind, ActorStats } from '../scenario/types';
 
 // ── Inspected object types ──────────────────────────────────────────────────
-
-export interface InspectedTile {
-  kind: 'tile';
-  id: string;
-  position: [number, number, number];
-  roadType: RoadType;
-  rotation: number;
-}
 
 export interface InspectedActor {
   kind: 'actor';
@@ -37,7 +29,7 @@ export interface InspectedScenery {
   rotation: number;
 }
 
-export type InspectedObject = InspectedTile | InspectedActor | InspectedEgo | InspectedScenery;
+export type InspectedObject = InspectedActor | InspectedEgo | InspectedScenery;
 
 type StatField = keyof ActorStats;
 
@@ -117,26 +109,6 @@ function StatsSection({ accel, brake, topSpeed, onChange }: {
 
 // ── Per-kind panels ─────────────────────────────────────────────────────────
 
-function TileInspector({ obj, onDelete }: { obj: InspectedTile; onDelete: () => void }) {
-  const [x, , z] = obj.position;
-  const rotationDeg = obj.rotation * 90;
-  const isOrigin = x === 0 && z === 0;
-
-  return (
-    <div>
-      <KindBadge label="Road Tile" />
-      <Field label="Type" value={obj.roadType} />
-      <Field label="X" value={x} />
-      <Field label="Z" value={z} />
-      <Field label="Rotation" value={`${rotationDeg}°`} />
-      {isOrigin
-        ? <p className="mt-3 text-[11px] text-white/30 italic text-center">Origin tile cannot be deleted</p>
-        : <DeleteButton onDelete={onDelete} />
-      }
-    </div>
-  );
-}
-
 function ActorInspector({ obj, onStatChange }: {
   obj: InspectedActor;
   onStatChange: (field: StatField, value: number) => void;
@@ -203,10 +175,6 @@ interface Props {
 export default function Inspector({ object, onDelete, onStatChange }: Props) {
   if (!object) {
     return <p className="text-xs text-white/40 italic">Nothing selected</p>;
-  }
-
-  if (object.kind === 'tile') {
-    return <TileInspector obj={object} onDelete={onDelete} />;
   }
 
   if (object.kind === 'actor') {
